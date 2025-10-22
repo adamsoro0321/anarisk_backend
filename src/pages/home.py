@@ -2,12 +2,13 @@ import dash
 from dash import html, Input, Output, State, callback, dcc
 import pandas as pd
 import os
-from src.layout import render_table, create_professional_layout
-from src import globals as app_globals
+
+import globals as app_globals
 import logging
 import dash_ag_grid as dag
 from dash_iconify import DashIconify
-from src.utils.util import COLS_DAG
+from utils.util import COLS_DAG
+from utils.indicateur_list import INDICATEUR_LIST_DROPDOWN
 from dash import ctx
 import dash_bootstrap_components as dbc
 
@@ -17,8 +18,12 @@ from core.risk_compute import RiskComputer
 dash.register_page(__name__, path="/")
 
 day_file = "./data/df_model.csv"
-df_risk_day = pd.read_csv(day_file)
+os.makedirs(os.path.dirname(day_file) or ".", exist_ok=True)
 
+if os.path.exists(day_file):
+    df_risk_day = pd.read_csv(day_file)
+else:
+    df_risk_day = pd.DataFrame(columns=[col["field"] for col in COLS_DAG])
 
 grid = dag.AgGrid(
     id="get-started-example-basic",
@@ -256,6 +261,53 @@ header = html.Div(
                     ],
                     style={"flex": "1", "position": "relative"},
                 ),
+                # Dropdown des indicateurs
+                html.Div(
+                    [
+                        html.Label(
+                            "Indicateurs de risque:",
+                            style={
+                                "fontSize": "0.9rem",
+                                "color": "#666",
+                                "fontWeight": "500",
+                                "marginBottom": "8px",
+                            },
+                        ),
+                        dcc.Dropdown(
+                            id="indicateur-dropdown",
+                            options=INDICATEUR_LIST_DROPDOWN,
+                            value=[],
+                            multi=True,
+                            placeholder="Sélectionner des indicateurs...",
+                            style={"fontSize": "0.9rem"},
+                        ),
+                    ],
+                    style={"marginRight": "20px", "minWidth": "250px"},
+                ),
+                # Date picker range avec Bootstrap
+                html.Div(
+                    [
+                        html.Label(
+                            "Période d'analyse:",
+                            style={
+                                "fontSize": "0.9rem",
+                                "color": "#666",
+                                "fontWeight": "500",
+                                "marginBottom": "8px",
+                            },
+                        ),
+                        dcc.DatePickerRange(
+                            id="date-picker-range",
+                            start_date=None,
+                            end_date=None,
+                            start_date_placeholder_text="Date de début",
+                            end_date_placeholder_text="Date de fin",
+                            display_format="DD/MM/YYYY",
+                            style={"width": "100%"},
+                        ),
+                    ],
+                    style={"marginRight": "20px", "minWidth": "280px"},
+                ),
                 # Boutons d'export
                 html.Div(
                     [
@@ -378,7 +430,6 @@ layout = html.Div(
     [
         html.Div(
             [
-                # create_professional_layout(),
                 # Header de la grille avec boutons d'export
                 html.Div(
                     [
@@ -407,7 +458,7 @@ layout = html.Div(
                 # Composant caché pour gérer les actions de la grille
                 html.Div(id="grid-actions-trigger", style={"display": "none"}),
                 html.Div(id="grid-actions-output", style={"marginTop": "20px"}),
-                # html.Div(id="results-container", children=html.Div()),
+                html.Div(id="results-container", children=html.Div()),
             ]
         ),
     ]
@@ -445,6 +496,7 @@ def calculate_indicators(n_clicks, selected_indicators, start_date, end_date):
     si oui affiche le tableau
     sinon lance l'analyseur de risque
     """
+    print("Calcul des indicateurs déclenché.")
     # Récupérer risk_analyzer depuis le module global
     risk_analyzer = app_globals.get_risk_analyzer()
 
@@ -456,43 +508,11 @@ def calculate_indicators(n_clicks, selected_indicators, start_date, end_date):
 
     # Filtrage par période si des dates sont sélectionnées
     if start_date and end_date:
-        # Message informatif sur la période sélectionnée
-        period_info = html.Div(
-            [
-                html.P(
-                    f"Période sélectionnée : du {start_date} au {end_date}",
-                    style={
-                        "color": "#2e7d32",
-                        "fontWeight": "500",
-                        "marginBottom": "20px",
-                        "textAlign": "center",
-                        "fontSize": "1.1rem",
-                    },
-                )
-            ]
-        )
+        pass
     else:
-        period_info = html.Div()
+        pass
 
-    is_day_risk_exist = check_if_data_risk_day()
-    if not is_day_risk_exist:
-        # Appel à l'analyseur de risques avec les indicateurs sélectionnés
-        results = risk_analyzer.analyze(df_risk_day, selected_indicators)
-        if results is None:
-            return "Patientez, l'analyse est en cours..."
-        else:
-            # Filtrer les résultats selon la période si spécifiée
-            df_filtered = filter_data_by_period(results, start_date, end_date)
-            df_display = df_filtered.head(20).copy()
-            return html.Div([period_info, show_df(df_display, selected_indicators)])
-    else:
-        # Filtrer les données selon la période si spécifiée
-        df_filtered = filter_data_by_period(df_risk_day, start_date, end_date)
-        df_display = df_filtered.head(
-            20
-        ).copy()  # Limiter à 20 lignes pour la performance
-
-        return html.Div([period_info, show_df(df_display, selected_indicators)])
+    return "success"
 
 
 def filter_data_by_period(data, start_date, end_date):
@@ -517,11 +537,6 @@ def filter_data_by_period(data, start_date, end_date):
     except Exception as e:
         logging.warning(f"Erreur lors du filtrage par période: {e}")
         return data
-
-
-def show_df(df_display, selected_indicators):
-    # Rendu du tableau en filtrant dynamiquement les colonnes de risque selon la sélection
-    return render_table(df_display, selected_indicators=selected_indicators)
 
 
 # Callbacks pour les exports

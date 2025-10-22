@@ -1,5 +1,5 @@
 import os
-from .db.ods import connectionOds
+from db.ods import connectionOds
 # Configuration des variables d'environnement
 
 # Variables globales pour partager entre les modules

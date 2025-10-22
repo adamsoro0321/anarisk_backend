@@ -28,13 +28,9 @@ from queries import (
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Création du dossier "output" s’il n’existe pas
-output_dir = os.path.join(BASE_DIR, "..", "output")
+# output_dir = os.path.join("..", "output")
 
 
-# Chemin complet du fichier de log
-log_file = os.path.join(output_dir, "data_loader.log")
-
-print(f"Logging to: {log_file}")
 warnings.filterwarnings("ignore")
 log_file_path = os.path.join("../output", "data_loader.log")
 # Configuration du logging
