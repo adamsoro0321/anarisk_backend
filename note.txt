@@ -1,0 +1,7 @@
+
+===========A faire =======
+1.contiuer de gere la selection des colonne
+cacul de risque pour un contrubuable
+2.Geration de fiche indivuel 
+3.Generalisation 
+

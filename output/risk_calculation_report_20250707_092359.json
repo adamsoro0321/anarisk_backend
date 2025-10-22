@@ -1,0 +1,13 @@
+{
+  "execution_summary": {
+    "start_time": "2025-07-07T09:23:58.975768",
+    "end_time": "2025-07-07T09:23:59.789481",
+    "duration": "0:00:00.797930",
+    "companies_processed": 110,
+    "indicators_calculated": 15,
+    "errors": []
+  },
+  "risk_analysis": {
+    "total_companies": 110,
+    "risk_distribution": {
+      "vert": 
