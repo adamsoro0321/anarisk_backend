@@ -1,0 +1,11 @@
+*.log
+node_modules/
+.env
+__pycache__/
+*.pyc
+.DS_Store
+venv/
+.idea/
+*.swp
+data/
+outputs/
