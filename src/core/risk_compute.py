@@ -9,7 +9,7 @@ import time
 import logging
 from typing import Dict
 import warnings
-
+import traceback
 from .data_loader import DataLoader
 
 # Import des modules d'indicateurs
@@ -46,12 +46,14 @@ class RiskComputer:
         self.merged_data = pd.DataFrame()
         self.data_loader = data_loader
         self.logger = logging.getLogger(__name__)
+        self.output_dir = "../output"
+        self.data_dir = "../data"
 
     def invoke_data_loader(self):
         """Initialiser le chargeur de données avec les connexions aux bases"""
-
-    def compute_from_merged_data(self, merged_data: pd.DataFrame) -> pd.DataFrame:
-        pass
+        # Récupération des données
+        merged_data = self.data_loader.run_full_analysis()
+        return merged_data
 
     def calculate_all_indicators(
         self, merged_data: pd.DataFrame, indicators: list, nbr_lignes: int | None = None
@@ -79,11 +81,6 @@ class RiskComputer:
             result = TVAIndicators.calculate_indicator_13(merged_data, result)
         if 14 in indicators:
             result = TVAIndicators.calculate_indicator_14(merged_data, result)
-        # merged_data = TVAIndicators.calculate_indicator_2(merged_data)
-        # merged_data = TVAIndicators.calculate_indicator_8(merged_data)
-        # merged_data = TVAIndicators.calculate_indicator_12(merged_data)
-        # merged_data = TVAIndicators.calculate_indicator_13(merged_data)
-        # merged_data = TVAIndicators.calculate_indicator_14(merged_data)
 
         # Indicateurs Import/Export (3, 4, 5)
         if 3 in indicators:
@@ -92,9 +89,6 @@ class RiskComputer:
             result = ImportExportIndicators.calculate_indicator_4(merged_data, result)
         if 5 in indicators:
             result = ImportExportIndicators.calculate_indicator_5(merged_data, result)
-        # merged_data = ImportExportIndicators.calculate_indicator_3(merged_data)
-        # merged_data = ImportExportIndicators.calculate_indicator_4(merged_data)
-        # merged_data = ImportExportIndicators.calculate_indicator_5(merged_data)
 
         # Indicateurs Comptabilité (20, 21, 23, 27, 29)
         if 20 in indicators:
@@ -108,19 +102,11 @@ class RiskComputer:
         if 29 in indicators:
             result = ComptabiliteIndicators.calculate_indicator_29(merged_data, result)
 
-        # merged_data = ComptabiliteIndicators.calculate_indicator_20(merged_data)
-        # merged_data = ComptabiliteIndicators.calculate_indicator_21(merged_data)
-        # merged_data = ComptabiliteIndicators.calculate_indicator_23(merged_data)
-        # merged_data = ComptabiliteIndicators.calculate_indicator_27(merged_data)
-        # merged_data = ComptabiliteIndicators.calculate_indicator_29(merged_data)
-
         # Indicateurs Contrôle (15, 16)
         if 15 in indicators:
             result = ControleIndicators.calculate_indicator_15(merged_data, result)
         if 16 in indicators:
             result = ControleIndicators.calculate_indicator_16(merged_data, result)
-        # merged_data = ControleIndicators.calculate_indicator_15(merged_data)
-        # merged_data = ControleIndicators.calculate_indicator_16(merged_data)
 
         # Indicateurs Avancés (37, 38, 39, 46, 47, 49, 57, 58)
         if 37 in indicators:
@@ -139,51 +125,45 @@ class RiskComputer:
             result = AdvancedIndicators.calculate_indicator_57(merged_data, result)
         if 58 in indicators:
             result = AdvancedIndicators.calculate_indicator_58(merged_data, result)
-        # merged_data = AdvancedIndicators.calculate_indicator_37(merged_data)
-        # merged_data = AdvancedIndicators.calculate_indicator_38(merged_data)
-        # merged_data = AdvancedIndicators.calculate_indicator_39(merged_data)
-        # merged_data = AdvancedIndicators.calculate_indicator_46(merged_data)
-        # merged_data = AdvancedIndicators.calculate_indicator_47(merged_data)
-        # merged_data = AdvancedIndicators.calculate_indicator_49(merged_data)
-        # merged_data = AdvancedIndicators.calculate_indicator_57(merged_data)
-        # merged_data = AdvancedIndicators.calculate_indicator_58(merged_data)
 
         self.logger.info("Calcul de tous les indicateurs terminé")
         return result
 
-    def run_complete_analysis(self, export_results: bool = True) -> Dict[str, any]:
+    def run(
+        self, indicateurs: [], nbr_lignes: int = 100, local_mode: bool = False
+    ) -> Dict[str, any]:
         """
         Exécution complète de l'analyse de risque
-        Compatible avec l'interface de l'application Dash
-        """
+        Compatible avec l'interface de l'application Dash"""
+
         self.logger.info("=== DÉMARRAGE ANALYSE COMPLÈTE (MODULAIRE) ===")
         start_time = time.time()
-
         try:
             # Récupération des données
-            merged_data = self.data_loader.run_full_analysis()
+            if not local_mode:
+                merged_data = self.invoke_data_loader()
+            else:
+                merged_data = pd.read_csv(f"{self.data_dir}/merged_data.csv")
+
+            self.logger.info("Données chargées et mergées avec succès.")
 
             # 3. Calcul des indicateurs
-            results_data = self.calculate_all_indicators(merged_data)
+            results_data = self.calculate_all_indicators(
+                merged_data, indicateurs, nbr_lignes
+            )
 
             elapsed_time = time.time() - start_time
-            nb_contribuables = len(results_data)
 
+            results_data.to_csv(
+                f"{self.output_dir}/risk_indicators.csv", index=False, sep=";"
+            )
             self.logger.info(f"=== ANALYSE TERMINÉE EN {elapsed_time:.2f}s ===")
-            self.logger.info(f"Contribuables analysés: {nb_contribuables}")
 
             # Retourner le format attendu par l'app Dash
-            return {
-                "success": True,
-                "data": results_data if export_results else None,
-                "nb_contribuables": nb_contribuables,
-                "nb_reports": 0,
-                "message": "Analyse modulaire terminée avec succès",
-            }
+            return {"success": True}
 
         except Exception as e:
             self.logger.error(f"Erreur lors de l'analyse complète: {e}")
-            import traceback
 
             self.logger.error(traceback.format_exc())
 

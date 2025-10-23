@@ -433,6 +433,9 @@ layout = html.Div(
                 # Header de la grille avec boutons d'export
                 html.Div(
                     [
+                        html.Div(
+                            id="worker_status",
+                        ),
                         # Header section
                         header,
                         # Container de la grille
@@ -487,6 +490,14 @@ def check_if_data_risk_day():
     State("indicateur-dropdown", "value"),
     State("date-picker-range", "start_date"),
     State("date-picker-range", "end_date"),
+    running=[
+        (Output("calculate-indicators-button", "disabled"), True, False),
+        (
+            Output("worker_status", "children"),
+            dbc.Progress(value=100, color="warning", animated=True, striped=True),
+            "",
+        ),
+    ],
     prevent_initial_call=True,
 )
 def calculate_indicators(n_clicks, selected_indicators, start_date, end_date):
@@ -496,7 +507,9 @@ def calculate_indicators(n_clicks, selected_indicators, start_date, end_date):
     si oui affiche le tableau
     sinon lance l'analyseur de risque
     """
-    print("Calcul des indicateurs déclenché.")
+    print(
+        f"Calcul des indicateurs déclenché {n_clicks, selected_indicators, start_date, end_date}"
+    )
     # Récupérer risk_analyzer depuis le module global
     risk_analyzer = app_globals.get_risk_analyzer()
 
@@ -509,8 +522,10 @@ def calculate_indicators(n_clicks, selected_indicators, start_date, end_date):
     # Filtrage par période si des dates sont sélectionnées
     if start_date and end_date:
         pass
-    else:
-        pass
+
+    print("=== ANALYSE TERMINÉE ===1")
+    risk_analyzer.run(indicateurs=[1], local_mode=True)
+    print("=== ANALYSE TERMINÉE ===")
 
     return "success"
 
