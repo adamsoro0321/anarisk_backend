@@ -154,13 +154,12 @@ class RiskComputer:
 
             elapsed_time = time.time() - start_time
 
-            results_data.to_csv(
-                f"{self.output_dir}/risk_indicators.csv", index=False, sep=";"
-            )
+            file_path = f"{self.output_dir}/risk_indicators_{pd.Timestamp.now().strftime('%Y%m%d')}.csv"
+            results_data.to_csv(file_path, index=False, sep=";")
             self.logger.info(f"=== ANALYSE TERMINÉE EN {elapsed_time:.2f}s ===")
 
             # Retourner le format attendu par l'app Dash
-            return {"success": True}
+            return {"file": file_path}
 
         except Exception as e:
             self.logger.error(f"Erreur lors de l'analyse complète: {e}")

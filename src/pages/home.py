@@ -461,7 +461,9 @@ layout = html.Div(
                 # Composant caché pour gérer les actions de la grille
                 html.Div(id="grid-actions-trigger", style={"display": "none"}),
                 html.Div(id="grid-actions-output", style={"marginTop": "20px"}),
-                html.Div(id="results-container", children=html.Div()),
+                dcc.Store(
+                    id="calculation-status"
+                ),  # composant invisible pour transmettre l’état
             ]
         ),
     ]
@@ -485,7 +487,7 @@ def check_if_data_risk_day():
 
 
 @callback(
-    Output("results-container", "children"),
+    Output("calculation-status", "data"),
     Input("calculate-indicators-button", "n_clicks"),
     State("indicateur-dropdown", "value"),
     State("date-picker-range", "start_date"),
@@ -507,9 +509,7 @@ def calculate_indicators(n_clicks, selected_indicators, start_date, end_date):
     si oui affiche le tableau
     sinon lance l'analyseur de risque
     """
-    print(
-        f"Calcul des indicateurs déclenché {n_clicks, selected_indicators, start_date, end_date}"
-    )
+
     # Récupérer risk_analyzer depuis le module global
     risk_analyzer = app_globals.get_risk_analyzer()
 
@@ -523,11 +523,28 @@ def calculate_indicators(n_clicks, selected_indicators, start_date, end_date):
     if start_date and end_date:
         pass
 
-    print("=== ANALYSE TERMINÉE ===1")
-    risk_analyzer.run(indicateurs=[1], local_mode=True)
-    print("=== ANALYSE TERMINÉE ===")
+    try:
+        file_path = risk_analyzer.run(indicateurs=[1], local_mode=True)
 
-    return "success"
+        return file_path
+    except Exception as e:
+        return f"Analyse échouée: {str(e)}"
+
+
+@callback(
+    # Output("worker_status", "children"),
+    Input("calculation-status", "data"),
+    prevent_initial_call=True,
+)
+def post_calculation_action(status_data):
+    if not status_data:
+        raise dash.exceptions.PreventUpdate
+    if status_data.get("status") == "done":
+        # 👉 ici tu lances ton autre logique
+        return dbc.Alert(
+            "Analyse terminée, lancement du post-traitement...", color="success"
+        )
+    return ""
 
 
 def filter_data_by_period(data, start_date, end_date):
