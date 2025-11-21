@@ -216,23 +216,27 @@ class DataLoader:
     def _construct_bd_tva_complete(self, connection) -> pd.DataFrame:
         """Construction complète de BD_TVA selon la logique exacte du script R"""
         self.logger.info("Construction BD_TVA complète (reproduction R)")
+        try:
+            start_time = time.time()
+            if self.IS_LOCAL_MODE:
+                bd_tva = pd.read_csv(f"{self.DATA_DIR}/bd_tva_complete.csv")
+            else:
+                bd_tva = pd.read_sql(sql_tva_complete, connection)
+                bd_tva.to_csv(
+                    f"{self.DATA_DIR}/bd_tva_complete.csv", index=False, encoding="utf-8"
+                 )
+     
+            bd_tva.columns = bd_tva.columns.str.upper()
 
-        start_time = time.time()
-        if self.IS_LOCAL_MODE:
-            bd_tva = pd.read_csv(f"{self.DATA_DIR}/bd_tva_complete.csv")
-        else:
-            bd_tva = pd.read_sql(sql_tva_complete, connection)
-            bd_tva.to_csv(
-                f"{self.DATA_DIR}/bd_tva_complete.csv", index=False, encoding="utf-8"
+            elapsed_time = time.time() - start_time
+            self.logger.info(
+                f"BD_TVA construite (R-compatible): {len(bd_tva)} lignes en {elapsed_time:.2f}s"
             )
-            bd_tva.drop_duplicates(inplace=True)
-        bd_tva.columns = bd_tva.columns.str.upper()
-
-        elapsed_time = time.time() - start_time
-        self.logger.info(
-            f"BD_TVA construite (R-compatible): {len(bd_tva)} lignes en {elapsed_time:.2f}s"
-        )
-        return bd_tva
+            return bd_tva
+        except Exception as e:
+            self.logger.error(f"Erreur lors de l'extraction DGD: {e}")
+            return pd.DataFrame()
+        
 
     def _extract_dcf_tva_deduction(self, connection) -> pd.DataFrame:
         """Extraction des déductions TVA détaillées"""
@@ -261,8 +265,37 @@ class DataLoader:
         except Exception as e:
             self.logger.warning(f"Erreur extraction DCF_TVA_DEDUCTION: {e}")
             return pd.DataFrame()
-
+   
     def _extract_dgd_complete_with_nomenclature(self, connection) -> pd.DataFrame:
+        """Extraction complète des données DGD avec nomenclature SH"""
+        self.logger.info("Extraction DGD complète avec nomenclature")
+
+        try:
+            start_time = time.time()
+            if self.IS_LOCAL_MODE:
+                dgd_data = pd.read_csv(f"{self.DATA_DIR}/dgd_complete.csv")
+            else:
+                dgd_data = pd.read_sql(sql_dgd, connection)
+
+                dgd_data.to_csv(
+                    f"{self.DATA_DIR}/dgd_complete.csv", index=False, encoding="utf-8"
+                )
+                self.logger.info(
+                    f"DGD extraite de la base Oracle: {len(dgd_data)} lignes"
+                )           
+            dgd_data.columns = dgd_data.columns.str.upper()
+
+            elapsed_time = time.time() - start_time
+            self.logger.info(
+                f"DGD complète extraite: {len(dgd_data)} lignes en {elapsed_time:.2f}s"
+            )
+            return dgd_data
+
+        except Exception as e:
+            self.logger.error(f"Erreur lors de l'extraction DGD: {e}")
+            return pd.DataFrame()
+        
+    def _extract_dgd_complete_with_nomenclature_v1(self, connection) -> pd.DataFrame:
         """Extraction complète des données DGD avec nomenclature SH"""
         self.logger.info("Extraction DGD complète avec nomenclature")
 
@@ -323,7 +356,7 @@ class DataLoader:
 
         except Exception as e:
             self.logger.error(f"Erreur lors de l'extraction DGD: {e}")
-            return pd.DataFrame()
+            return pd.DataFrame()    
 
     def _extract_programmation_controles(self, connection) -> pd.DataFrame:
         """Extraction des données de programmation et contrôles"""
