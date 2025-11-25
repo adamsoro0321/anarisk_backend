@@ -2,7 +2,7 @@ import dash
 from dash import html
 
 
-dash.register_page(__name__, path="/dashboard")
+dash.register_page(__name__, path="/dashboard",title="Dashboard", order=3)
 
 layout = html.Div(
     [

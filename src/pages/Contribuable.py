@@ -3,7 +3,7 @@ import dash
 from dash import html, dcc, callback, Input, Output, State
 import dash_bootstrap_components as dbc
 
-dash.register_page(__name__, path="/contribuables")
+dash.register_page(__name__, path="/contribuables", title="Contribuables", order=2)
 
 is_processing = False
 layout = html.Div(

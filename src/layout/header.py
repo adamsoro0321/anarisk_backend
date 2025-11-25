@@ -1,6 +1,7 @@
 from dash import html, dcc
 import dash
-
+from flask_login import current_user
+from flask import has_request_context
 
 def get_page_icon(page_name):
     """Retourne l'icône FontAwesome appropriée selon le nom de la page"""
@@ -67,7 +68,7 @@ def is_current_page(page):
     """Détermine si c'est la page courante (pour l'instant, retourne False)"""
     # Cette fonction pourrait être améliorée avec la logique de détection de page courante
     # Pour l'instant, on considère la première page comme active
-    return False
+    return True
 
 
 def get_active_style():
@@ -84,6 +85,106 @@ def get_active_style():
 
 
 def top_bar():
+    # Define menu items based on role
+    menu_items = []
+    if has_request_context() and current_user and current_user.is_authenticated:
+        for page in dash.page_registry.values():
+            # Skip login and logout pages in menu
+            if page["path"] in ["/login", "/logout"]:
+                continue
+                
+            # RBAC Logic
+            if current_user.role != 'admin':
+                # Example: Restrict 'settings' or 'config' to admin
+                if "setting" in page["name"].lower() or "config" in page["name"].lower():
+                    continue
+            
+            menu_items.append(
+                html.Li(
+                    dcc.Link(
+                        [
+                            html.I(
+                                className=get_page_icon(page["name"]),
+                                style={"marginRight": "10px", "fontSize": "1.1rem"},
+                            ),
+                            get_clean_page_name(page["name"]),
+                        ],
+                        href=page["relative_path"],
+                        style={
+                            "display": "flex",
+                            "alignItems": "left",
+                            "padding": "14px 28px",
+                            "color": "#2e7d32",
+                            "textDecoration": "none",
+                            "borderRadius": "10px",
+                            "transition": "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                            "fontWeight": "500",
+                            "fontSize": "1rem",
+                            "backgroundColor": "transparent",
+                            "border": "2px solid transparent",
+                            "position": "relative",
+                            "overflow": "hidden",
+                        },
+                        className="nav-page-link",
+                    ),
+                    style={
+                        "listStyle": "none",
+                        "margin": "0 8px",
+                        "position": "relative",
+                    },
+                )
+            )
+        
+        # Add Logout button
+        menu_items.append(
+            html.Li(
+                dcc.Link(
+                    [
+                        html.I(className="fas fa-sign-out-alt", style={"marginRight": "10px", "fontSize": "1.1rem"}),
+                        "Déconnexion",
+                    ],
+                    href="/logout",
+                    style={
+                        "display": "flex",
+                        "alignItems": "left",
+                        "padding": "14px 28px",
+                        "color": "#d32f2f",
+                        "textDecoration": "none",
+                        "borderRadius": "10px",
+                        "fontWeight": "500",
+                        "fontSize": "1rem",
+                    },
+                    className="nav-page-link",
+                ),
+                style={"listStyle": "none", "margin": "0 8px"},
+            )
+        )
+    else:
+        # Show only Login if not authenticated
+        menu_items.append(
+             html.Li(
+                dcc.Link(
+                    [
+                        html.I(className="fas fa-sign-in-alt", style={"marginRight": "10px", "fontSize": "1.1rem"}),
+                        "Connexion",
+                    ],
+                    href="/login",
+                    style={
+                        "display": "flex",
+                        "alignItems": "left",
+                        "padding": "14px 28px",
+                        "color": "#2e7d32",
+                        "textDecoration": "none",
+                        "borderRadius": "10px",
+                        "fontWeight": "500",
+                        "fontSize": "1rem",
+                    },
+                    className="nav-page-link",
+                ),
+                style={"listStyle": "none", "margin": "0 8px"},
+            )
+        )
+
     return html.Div(
         [
             # Header principal avec logo et titre
@@ -151,49 +252,7 @@ def top_bar():
                     html.Nav(
                         [
                             html.Ul(
-                                [
-                                    html.Li(
-                                        dcc.Link(
-                                            [
-                                                # Icône dynamique selon le nom de la page
-                                                html.I(
-                                                    className=get_page_icon(
-                                                        page["name"]
-                                                    ),
-                                                    style={
-                                                        "marginRight": "10px",
-                                                        "fontSize": "1.1rem",
-                                                    },
-                                                ),
-                                                # Nom de la page nettoyé
-                                                get_clean_page_name(page["name"]),
-                                            ],
-                                            href=page["relative_path"],
-                                            style={
-                                                "display": "flex",
-                                                "alignItems": "left",
-                                                "padding": "14px 28px",
-                                                "color": "#2e7d32",
-                                                "textDecoration": "none",
-                                                "borderRadius": "10px",
-                                                "transition": "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                                                "fontWeight": "500",
-                                                "fontSize": "1rem",
-                                                "backgroundColor": "transparent",
-                                                "border": "2px solid transparent",
-                                                "position": "relative",
-                                                "overflow": "hidden",
-                                            },
-                                            className="nav-page-link",
-                                        ),
-                                        style={
-                                            "listStyle": "none",
-                                            "margin": "0 8px",
-                                            "position": "relative",
-                                        },
-                                    )
-                                    for page in dash.page_registry.values()
-                                ],
+                                menu_items,
                                 style={
                                     "display": "flex",
                                     "alignItems": "center",

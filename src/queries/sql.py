@@ -106,7 +106,7 @@ sql_tva_complete = """
 
 # 3.
 sql_tva_deduction = """
-           WITH DCF_TVA_DEDUCTION AS (
+    WITH DCF_TVA_DEDUCTION AS (
     SELECT
         NUM_IFU_CLIENT,
         UPPER(REGEXP_REPLACE(REGEXP_REPLACE(NUM_IFU_FOURN, ' ', ''), '[^[:alnum:]]', '')) AS NUM_IFU_FOURN,

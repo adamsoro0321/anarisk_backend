@@ -2,7 +2,7 @@ import dash
 from dash import html
 
 
-dash.register_page(__name__, path="/indicateur")
+dash.register_page(__name__, path="/indicateur",title="Indicateur", order=4)
 
 layout = html.Div(
     [
