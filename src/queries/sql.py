@@ -15,7 +15,7 @@ sql_contribuable = text("""
 
 # 2.
 sql_tva_complete = """
-        WITH tva_base AS (
+       WITH tva_base AS (
             SELECT 
                 NUM_IFU, NOM, ANNEE_FISCAL, MOIS_FISCAL,
                 MONTANT_DECLARE, 
@@ -98,10 +98,11 @@ sql_tva_complete = """
         )
         SELECT 
             ta.*,
-            COALESCE(td.TVA_DECEMBRE, 0) as TVA_DECEMBRE
+            COALESCE(td.TVA_DECEMBRE, 0) as TVA_DECEMBRE,
+            ta.ANNEE_FISCAL AS ANNEE
         FROM tva_annuel ta
         LEFT JOIN tva_decembre td ON ta.NUM_IFU = td.NUM_IFU AND ta.ANNEE_FISCAL = td.ANNEE_FISCAL
-        ORDER BY ta.NUM_IFU, ta.ANNEE_FISCAL
+        ORDER BY ta.NUM_IFU, ta.ANNEE_FISCAL 
         """
 
 # 3.
@@ -118,7 +119,6 @@ sql_tva_deduction = """
         NATURE_DEDUCTION
     FROM PROG_DCF.DCF_TVA_FACTURE_DEDUITE
 ),
-
 AN_CLIENT_11_12 AS (
     SELECT
         NUM_IFU_CLIENT AS NUM_IFU,
@@ -130,7 +130,6 @@ AN_CLIENT_11_12 AS (
     WHERE MOIS_FISCAL IN (11, 12)
     GROUP BY NUM_IFU_CLIENT, ANNEE_FISCAL
 ),
-
 AN_FOURN_11_12 AS (
     SELECT
         NUM_IFU_FOURN AS NUM_IFU,
@@ -142,7 +141,6 @@ AN_FOURN_11_12 AS (
     WHERE MOIS_FISCAL IN (11, 12)
     GROUP BY NUM_IFU_FOURN, ANNEE_FISCAL
 ),
-
 AN_CLIENT AS (
     SELECT
         NUM_IFU_CLIENT AS NUM_IFU,
@@ -153,7 +151,6 @@ AN_CLIENT AS (
     FROM DCF_TVA_DEDUCTION
     GROUP BY NUM_IFU_CLIENT, ANNEE_FISCAL
 ),
-
 AN_FOURN AS (
     SELECT
         NUM_IFU_FOURN AS NUM_IFU,
@@ -164,7 +161,6 @@ AN_FOURN AS (
     FROM DCF_TVA_DEDUCTION
     GROUP BY NUM_IFU_FOURN, ANNEE_FISCAL
 ),
-
 DGD_IMPORT AS (
     SELECT
         NUM_IFU_CLIENT AS NUM_IFU,
@@ -174,28 +170,22 @@ DGD_IMPORT AS (
     WHERE NATURE_DEDUCTION IN ('BAIS Importation', 'IMM importation')
     GROUP BY NUM_IFU_CLIENT, ANNEE_FISCAL
 ),
-
 BD_TVA_DEDUC AS (
     SELECT
         COALESCE(c11.NUM_IFU, f11.NUM_IFU, ca.NUM_IFU, fa.NUM_IFU) AS NUM_IFU,
         COALESCE(c11.ANNEE, f11.ANNEE, ca.ANNEE, fa.ANNEE) AS ANNEE,
-
         c11.CLI_TVA_DEDUCTIBLE_NOV_DEC,
         c11.CLI_PR_HT_NOV_DEC,
         c11.CLI_TVA_FACTURE_NOV_DEC,
-
         f11.FOURN_TVA_DEDUCTIBLE_NOV_DEC,
         f11.FOURN_PR_HT_NOV_DEC,
         f11.FOURN_TVA_FACTURE_NOV_DEC,
-
         ca.CLI_TVA_DEDUCTIBLE_AN,
         ca.CLI_PR_HT_AN,
         ca.CLI_TVA_FACTURE_AN,
-
         fa.FOURN_TVA_DEDUCTIBLE_AN,
         fa.FOURN_PR_HT_AN,
         fa.FOURN_TVA_FACTURE_AN
-
     FROM AN_CLIENT_11_12 c11
         FULL JOIN AN_FOURN_11_12 f11 
             ON c11.NUM_IFU = f11.NUM_IFU AND c11.ANNEE = f11.ANNEE
@@ -206,32 +196,25 @@ BD_TVA_DEDUC AS (
             ON fa.NUM_IFU = COALESCE(c11.NUM_IFU, f11.NUM_IFU, ca.NUM_IFU)
            AND fa.ANNEE  = COALESCE(c11.ANNEE, f11.ANNEE, ca.ANNEE)
 )
-
 SELECT
     b.NUM_IFU,
     b.ANNEE,
-
     NVL(b.CLI_TVA_DEDUCTIBLE_NOV_DEC, 0) AS CLI_TVA_DEDUCTIBLE_NOV_DEC,
     NVL(b.CLI_PR_HT_NOV_DEC, 0) AS CLI_PR_HT_NOV_DEC,
     NVL(b.CLI_TVA_FACTURE_NOV_DEC, 0) AS CLI_TVA_FACTURE_NOV_DEC,
-
     NVL(b.FOURN_TVA_DEDUCTIBLE_NOV_DEC, 0) AS FOURN_TVA_DEDUCTIBLE_NOV_DEC,
     NVL(b.FOURN_PR_HT_NOV_DEC, 0) AS FOURN_PR_HT_NOV_DEC,
     NVL(b.FOURN_TVA_FACTURE_NOV_DEC, 0) AS FOURN_TVA_FACTURE_NOV_DEC,
-
     NVL(b.CLI_TVA_DEDUCTIBLE_AN, 0) AS CLI_TVA_DEDUCTIBLE_AN,
     NVL(b.CLI_PR_HT_AN, 0) AS CLI_PR_HT_AN,
     NVL(b.CLI_TVA_FACTURE_AN, 0) AS CLI_TVA_FACTURE_AN,
-
     NVL(b.FOURN_TVA_DEDUCTIBLE_AN, 0) AS FOURN_TVA_DEDUCTIBLE_AN,
     NVL(b.FOURN_PR_HT_AN, 0) AS FOURN_PR_HT_AN,
     NVL(b.FOURN_TVA_FACTURE_AN, 0) AS FOURN_TVA_FACTURE_AN,
-
     NVL(i.TVA_SUPPORTE_IMPORT, 0) AS TVA_SUPPORTE_IMPORT
-
 FROM BD_TVA_DEDUC b
 LEFT JOIN DGD_IMPORT i 
-    ON i.NUM_IFU = b.NUM_IFU AND i.ANNEE = b.ANNEE;
+    ON i.NUM_IFU = b.NUM_IFU AND i.ANNEE = b.ANNEE
             """
 # 4.
 sql_dgd = """
@@ -383,7 +366,8 @@ sql_programmations_control = """
             LEFT JOIN prog_combined pc ON ci.ID_CONTR = pc.ID_CONTR
             LEFT JOIN avis_data ad ON ci.ID_CONTR = ad.ID_CONTR
             WHERE ci.NUM_IFU IS NOT NULL
-            """
+            """ 
+
 
 # 6.
 sql_benefices_complete = """

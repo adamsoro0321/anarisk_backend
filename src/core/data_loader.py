@@ -60,10 +60,11 @@ class DataLoader:
         self.logger = logging.getLogger(__name__)
         self.IS_LOCAL_MODE = False
         self.non_eligible_list = []
+      
 
         # Charger les fichiers de référence
         self.load_reference_data()
-
+ 
     def load_reference_data(self):
         """Charger tous les fichiers de référence utilisés par les scripts R"""
         self.logger.info("Chargement des données de référence...")

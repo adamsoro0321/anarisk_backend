@@ -11,7 +11,7 @@ port = os.getenv("ods_port")
 database = os.getenv("ods_db")
 
 
-def connectionOds():
+def connectionOds(user=user, password=password, host=host, port=port, database=database):
     """
     return: engine
     """
@@ -19,7 +19,7 @@ def connectionOds():
     url = f"oracle+oracledb://{user}:{password}@{host}:{port}/?service_name={database}"
     try:
         engine = create_engine(url)
-        print(f"Connection to oracle {database} database successful")
+        print(f"engine  {database} database successful")
         return engine
     except Exception as e:
         print(f"Error: {e}")
