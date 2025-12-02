@@ -179,6 +179,8 @@ class DataLoader:
             contribuables = pd.read_csv(f"{self.DATA_DIR}/contribuables.csv")
         else:
             contribuables = pd.read_sql(sql_contribuable, connection)
+
+            #ajoute un traitement sur le tel
             # save in data/contribuables.csv
             contribuables.to_csv(
                 f"{self.DATA_DIR}/contribuables.csv", index=False, encoding="utf-8"
