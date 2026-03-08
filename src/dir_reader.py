@@ -29,10 +29,10 @@ class FolderInfo:
 
 class DirReader:
     """
-    Classe pour explorer et lire le dossier programmes et ses sous-dossiers.
+    Classe pour explorer et lire le dossier fiches et ses sous-dossiers.
     
     Structure hiérarchique (4 niveaux):
-    programmes/
+    fiches/
         programme_YYYY_MM_DD/           <- Programme (Niveau 0)
             STRUCTURE/                   <- Structure (Niveau 1) ex: DGE, DME_CI, DRI_CN
                 SOUS_STRUCTURE/          <- Sous-structure (Niveau 2) ex: DIRECTION_GRANDES ENTREPRISES, DCI_OUAGA_1
@@ -55,12 +55,12 @@ class DirReader:
         if root_path is None:
             # Chemin par défaut relatif au fichier actuel
             current_dir = Path(__file__).parent.parent
-            self.root_dir = current_dir / "programmes"
+            self.root_dir = current_dir / "fiches"
         else:
             self.root_dir = Path(root_path)
         
         if not self.root_dir.exists():
-            raise FileNotFoundError(f"Le dossier programmes n'existe pas: {self.root_dir}")
+            raise FileNotFoundError(f"Le dossier fiches n'existe pas: {self.root_dir}")
     
     # ========== FONCTIONS DE LISTING - NIVEAU 0: PROGRAMMES ==========
     

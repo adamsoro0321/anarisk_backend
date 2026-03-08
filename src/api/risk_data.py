@@ -6,9 +6,10 @@ from utils.util import get_latest_risk_file
 risk_bp = Blueprint('risk', __name__)
 
 
-# Variable globale pour les données de risque
+# Variable globale pour les données de risque - Cache par quantum
 file_name = get_latest_risk_file()
-_risk_data_df = None
+_risk_data_cache = {}  # Cache avec clé = libelle_quantume
+_default_risk_data_df = None
 risk_file_path = os.path.join(
                 os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
                 'data','risk_contribuables',
@@ -16,22 +17,49 @@ risk_file_path = os.path.join(
             )
 print(f"\n Risk data file path 22: {risk_file_path}")
 
-def _load_risk_data():
-    """Charge les données de risque depuis le fichier CSV"""
-    global _risk_data_df
-    if _risk_data_df is None or _risk_data_df.empty:
+def _load_risk_data(libelle_quantume=None):
+    """Charge les données de risque depuis le fichier CSV avec cache par quantum"""
+    global _risk_data_cache, _default_risk_data_df
+    
+    # Si un quantum spécifique est demandé
+    if libelle_quantume:
+        # Vérifier si déjà en cache
+        if libelle_quantume in _risk_data_cache:
+            return _risk_data_cache[libelle_quantume]
+        
+        # Charger le fichier du quantum
+        path_file = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            'data','risk_contribuables',
+            f"{libelle_quantume}.csv"
+        )
+        
+        if os.path.exists(path_file):
+            try:
+                df = pd.read_csv(path_file, sep=';', encoding='utf-8')
+                _risk_data_cache[libelle_quantume] = df
+                print(f"Risk data loaded for quantum '{libelle_quantume}': {df.shape}")
+                return df
+            except Exception as e:
+                raise Exception(f"Error loading risk data for quantume {libelle_quantume}: {str(e)}")
+        else:
+            raise FileNotFoundError(f"File not found for quantum '{libelle_quantume}': {path_file}")
+    
+    # Sinon, charger le fichier par défaut
+    else:
+        if _default_risk_data_df is None or _default_risk_data_df.empty:
             if os.path.exists(risk_file_path):
                 try:
-                    _risk_data_df = pd.read_csv(risk_file_path, sep=';', encoding='utf-8')
-                    print(f"Risk data loaded: {_risk_data_df.shape}")
+                    _default_risk_data_df = pd.read_csv(risk_file_path, sep=';', encoding='utf-8')
+                    print(f"Default risk data loaded: {_default_risk_data_df.shape}")
                 except Exception as e:
-                    print(f"Error loading risk data: {str(e)}")
-    return _risk_data_df
+                    print(f"Error loading default risk data: {str(e)}")
+        return _default_risk_data_df
 
 
-def get_risk_dataframe():
+def get_risk_dataframe(libelle_quantume=None):
     """Retourne le DataFrame des données de risque"""
-    return _load_risk_data()
+    return _load_risk_data(libelle_quantume)
 
 
 
@@ -50,8 +78,9 @@ def get_risk_data():
         JSON avec les données paginées et les métadonnées de pagination
     """
     try:
+        libelle_quantume = request.args.get('libelle_quantume', None)
         # Charger les données de risque
-        risk_data_df = get_risk_dataframe()
+        risk_data_df = get_risk_dataframe(libelle_quantume)
         
         # Vérifier si les données sont disponibles
         if risk_data_df is None or risk_data_df.empty:
@@ -185,3 +214,56 @@ def get_risk_data():
 
         }), 500
 
+@risk_bp.route('/risk-data/download/<string:libelle_quantume>', methods=['GET'])
+def download_risk_data(libelle_quantume):
+    """Télécharge les données de risque pour un quantum spécifique"""
+    try:
+        # Vérifier que le libellé n'est pas vide
+        if not libelle_quantume or libelle_quantume.strip() == '':
+            return jsonify({
+                'success': False,
+                'message': 'Le libellé du quantum est requis',
+                'error_code': 'MISSING_QUANTUME_LIBELLE'
+            }), 400
+        
+        df = get_risk_dataframe(libelle_quantume)
+        
+        if df is None or df.empty:
+            return jsonify({
+                'success': False,
+                'message': f'Pas de données de risque disponibles pour le quantum "{libelle_quantume}"',
+                'error_code': 'DATA_NOT_AVAILABLE'
+            }), 404
+        
+        # Convertir le DataFrame en CSV
+        csv_data = df.to_csv(index=False, sep=';', encoding='utf-8')
+        
+        # Retourner le CSV en tant que réponse téléchargeable
+        response = current_app.response_class(
+            response=csv_data,
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename="{libelle_quantume}_risk_data.csv"',
+                'Content-Type': 'text/csv; charset=utf-8'
+            }
+        )
+        
+        print(f"Téléchargement réussi pour le quantum: {libelle_quantume}")
+        return response
+    
+    except FileNotFoundError as e:
+        return jsonify({
+            'success': False,
+            'message': f'Fichier non trouvé pour le quantum "{libelle_quantume}"',
+            'error_code': 'FILE_NOT_FOUND',
+            'details': str(e)
+        }), 404
+    
+    except Exception as e:
+        current_app.logger.error(f"Erreur téléchargement données de risque pour quantume '{libelle_quantume}': {e}")
+        return jsonify({
+            'success': False,
+            'message': 'Erreur interne du serveur lors du téléchargement des données de risque',
+            'error_code': 'INTERNAL_SERVER_ERROR',
+            'details': str(e) if current_app.debug else None
+        }), 500
