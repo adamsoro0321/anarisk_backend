@@ -4,6 +4,7 @@ Reproduction des fonctions d'import/export du script R
 """
 
 import pandas as pd
+import numpy as np
 from datetime import datetime
 from typing import List
 
@@ -17,55 +18,69 @@ class ImportExportIndicators:
     ) -> pd.DataFrame:
         """
         INDICATEUR 3: Nouveau contribuable importateur important
-        Logique: Entreprise créée il y a moins de 12 mois avec importations >= 100M
+        
+        Logique R:
+            duree_en_mois <- as.numeric(interval(dateCreation, date_actuelle) / ddays(30))
+            if (duree_en_mois <= 12 & importation >= 100000000) {
+                Risque <- "rouge"
+            } else {
+                Risque <- "vert"
+            }
+        
+        Entreprise créée il y a moins de 12 mois avec importations >= 100M
         """
-
-        # Créer les colonnes de résultats si elles n'existent pas
+        # Initialiser la colonne si elle n'existe pas
         if "RISQUE_IND_3" not in risk_df.columns:
             risk_df["RISQUE_IND_3"] = "Non disponible"
-        if "AGE_MOIS_IND_3" not in risk_df.columns:
-            risk_df["AGE_MOIS_IND_3"] = 0
 
-        def tva_ind3(date_creation, importation):
-            """Calcul pour l'indicateur 3"""
-            if pd.isna(date_creation) or pd.isna(importation):
-                return ["Non disponible", 0]
-
-            # Conversion de la date si nécessaire
-            if isinstance(date_creation, str):
-                try:
-                    date_creation = pd.to_datetime(date_creation)
-                except Exception:
-                    return ["Non disponible", 0]
-
-            # Calcul de l'âge en mois
-            date_actuelle = datetime.now()
-            duree_mois = (
-                date_actuelle - date_creation
-            ).days / 30.44  # Moyenne de jours par mois
-
-            if duree_mois <= 12 and importation >= 100000000:
-                risque = "rouge"
-            else:
-                risque = "vert"
-
-            return [risque, duree_mois]
-
-        # Application du calcul
-        for i in range(len(merged_data)):
-            date_immat = merged_data.iloc[i].get("DATE_IMMAT")
-            import_caf = merged_data.iloc[i].get("IMPORT_CAF", 0)
-            numero_ifu = merged_data.iloc[i].get("NUM_IFU", "")
-            annee = merged_data.iloc[i].get("ANNEE", "")
-
-            result = tva_ind3(date_immat, import_caf)
-
-            # Cibler avec NUM_IFU et ANNEE
-            mask = (risk_df["NUM_IFU"] == numero_ifu) & (risk_df["ANNEE"] == annee)
-            risk_df.loc[mask, "RISQUE_IND_3"] = result[0]
-            risk_df.loc[mask, "AGE_MOIS_IND_3"] = result[1]
+        # Convertir DATE_IMMAT en datetime (tz-naive)
+        date_immat = pd.to_datetime(merged_data["DATE_IMMAT"], errors="coerce")
+        
+        # Supprimer timezone si présente pour éviter l'erreur:
+        # "Cannot compare tz-naive and tz-aware datetime-like objects"
+        if date_immat.dt.tz is not None:
+            date_immat = date_immat.dt.tz_localize(None)
+        
+        # Calculer la durée en mois (comme en R: interval / ddays(30))
+        # Utiliser datetime tz-naive pour la comparaison
+        date_actuelle = pd.Timestamp.now().tz_localize(None) if pd.Timestamp.now().tz is not None else pd.Timestamp.now()
+        duree_mois = (date_actuelle - date_immat).dt.days / 30
+        
+        # Récupérer IMPORT_CAF
+        import_caf = pd.to_numeric(merged_data["IMPORT_CAF"], errors="coerce").fillna(0)
+        
+        # Conditions valides (non NA)
+        valid_mask = date_immat.notna() & merged_data["IMPORT_CAF"].notna()
+        
+        # Condition de risque rouge: durée <= 12 mois ET importation >= 100M
+        risque_rouge = (duree_mois <= 12) & (import_caf >= 100000000)
+        
+        # Appliquer les résultats de manière vectorisée
+        # Par défaut "Non disponible", puis "vert" si valide, puis "rouge" si condition
+        risk_df.loc[valid_mask, "RISQUE_IND_3"] = "vert"
+        risk_df.loc[valid_mask & risque_rouge, "RISQUE_IND_3"] = "rouge"
 
         return risk_df
+
+    @staticmethod
+    def _get_groupe_from_score(score: pd.Series, criticite: int) -> pd.Series:
+        """
+        Détermine le groupe de risque à partir du score et de la criticité
+        Reproduit le switch R pour la détermination du groupe
+        """
+        groupe = pd.Series("vert", index=score.index)
+        
+        # Mapping des scores vers les groupes
+        groupe = np.where(score.isin([1, 2, 3, 4]), "vert", groupe)
+        groupe = np.where(score == 5, np.where(criticite == 1, "vert", "jaune"), groupe)
+        groupe = np.where(score == 6, np.where(criticite == 2, "vert", "jaune"), groupe)
+        groupe = np.where(score.isin([8, 9]), "jaune", groupe)
+        groupe = np.where(score == 10, np.where(criticite == 2, "jaune", "rouge"), groupe)
+        groupe = np.where(score.isin([12, 16]), "orange", groupe)
+        groupe = np.where(score == 15, np.where(criticite == 3, "orange", "rouge"), groupe)
+        groupe = np.where(score.isin([20, 25]), "rouge", groupe)
+        
+        return pd.Series(groupe, index=score.index)
 
     @staticmethod
     def calculate_indicator_4(
@@ -73,108 +88,88 @@ class ImportExportIndicators:
     ) -> pd.DataFrame:
         """
         INDICATEUR 4: Importateur dépassant les seuils de régime
-        Logique: CME > 15M ou RSI > 50M
-        """
+        Logique R:
+            if (regime == "CME") denominateur <- 15000000
+            else if (regime == "RSI") denominateur <- 50000000
+            indicateur <- numerateur / denominateur
+            if (indicateur < seuil) groupe = "vert"
+            else calcul écart et score
 
-        # Créer les colonnes de résultats si elles n'existent pas
+        Paramètres: criticite=5, seuil=1, coeff=0.8
+        """
+        # Paramètres fixes comme en R
+        criticite = 5
+        seuil = 1
+        coeff = 0.8
+        x1, x2, x3, x4 = 500000, 5000000, 20000000, 100000000
+
+        # Initialiser les colonnes
         if "RISQUE_IND_4" not in risk_df.columns:
             risk_df["RISQUE_IND_4"] = "Non disponible"
         if "GAP_IND_4" not in risk_df.columns:
-            risk_df["GAP_IND_4"] = 0
+            risk_df["GAP_IND_4"] = 0.0
         if "SCORE_IND_4" not in risk_df.columns:
             risk_df["SCORE_IND_4"] = 0
 
-        def ind4(criticite, numerateur, regime, seuil, coeff, x1, x2, x3, x4):
-            if not pd.isna(numerateur) and not pd.isna(regime):
-                if regime == "CME":
-                    denominateur = 15000000
-                elif regime == "RSI":
-                    denominateur = 50000000
-                else:
-                    indicateur = 0
-                    denominateur = 0
-
-                if denominateur > 0:
-                    indicateur = numerateur / denominateur
-                else:
-                    indicateur = 0
-            else:
-                indicateur = 0
-                denominateur = 0
-
-            if indicateur < seuil:
-                groupe = "vert"
-                ecart = 0
-                score = 0
-                return [ecart, groupe, score]
-            else:
-                ecart = abs(numerateur - denominateur)
-                ecart = ecart * coeff
-
-                if ecart < x1:
-                    impact = 1
-                elif ecart < x2:
-                    impact = 2
-                elif ecart < x3:
-                    impact = 3
-                elif ecart < x4:
-                    impact = 4
-                else:
-                    impact = 5
-
-                score = criticite * impact
-
-                # Détermination du groupe
-                if score in [1, 2, 3, 4]:
-                    groupe = "vert"
-                elif score == 5:
-                    groupe = "vert" if criticite == 1 else "jaune"
-                elif score == 6:
-                    groupe = "vert" if criticite == 2 else "jaune"
-                elif score in [8, 9]:
-                    groupe = "jaune"
-                elif score == 10:
-                    groupe = "jaune" if criticite == 2 else "rouge"
-                elif score in [12, 16]:
-                    groupe = "orange"
-                elif score == 15:
-                    groupe = "orange" if criticite == 3 else "rouge"
-                elif score in [20, 25]:
-                    groupe = "rouge"
-                else:
-                    groupe = "vert"
-
-                return [ecart, groupe, score]
-
-        # Application du calcul
-        for i in range(len(merged_data)):
-            import_caf = merged_data.iloc[i].get("IMPORT_CAF", 0)
-            code_reg_fisc = merged_data.iloc[i].get("CODE_REG_FISC")
-            numero_ifu = merged_data.iloc[i].get("NUM_IFU", "")
-            annee = merged_data.iloc[i].get("ANNEE", "")
-
-            if not pd.isna(import_caf) and not pd.isna(code_reg_fisc):
-                result = ind4(
-                    5,
-                    import_caf,
-                    code_reg_fisc,
-                    1,
-                    0.8,
-                    500000,
-                    5000000,
-                    20000000,
-                    100000000,
-                )
-                # Cibler avec NUM_IFU et ANNEE
-                mask = (risk_df["NUM_IFU"] == numero_ifu) & (risk_df["ANNEE"] == annee)
-                risk_df.loc[mask, "RISQUE_IND_4"] = result[1]
-                risk_df.loc[mask, "GAP_IND_4"] = result[0]
-                risk_df.loc[mask, "SCORE_IND_4"] = result[2]
-            else:
-                mask = (risk_df["NUM_IFU"] == numero_ifu) & (risk_df["ANNEE"] == annee)
-                risk_df.loc[mask, "RISQUE_IND_4"] = "Non disponible"
-                risk_df.loc[mask, "GAP_IND_4"] = 0
-                risk_df.loc[mask, "SCORE_IND_4"] = 0
+        # Récupérer les données
+        import_caf = pd.to_numeric(merged_data["IMPORT_CAF"], errors="coerce")
+        code_reg_fisc = merged_data["CODE_REG_FISC"]
+        
+        # Calculer le dénominateur selon le régime fiscal
+        denominateur = pd.Series(0.0, index=merged_data.index)
+        denominateur = np.where(code_reg_fisc == "CME", 15000000, denominateur)
+        denominateur = np.where(code_reg_fisc == "RSI", 50000000, denominateur)
+        denominateur = pd.Series(denominateur, index=merged_data.index)
+        
+        # Masque pour dénominateur invalide (régime autre que CME/RSI)
+        invalid_denom_mask = (denominateur == 0) | code_reg_fisc.isna()
+        
+        # Marquer les cas où le ratio n'est pas calculable (régime non concerné)
+        risk_df.loc[invalid_denom_mask, "RISQUE_IND_4"] = "Ratio non calculable"
+        risk_df.loc[invalid_denom_mask, "GAP_IND_4"] = 0.0
+        risk_df.loc[invalid_denom_mask, "SCORE_IND_4"] = 0
+        
+        # Calculer l'indicateur
+        indicateur = np.where(denominateur > 0, import_caf / denominateur, 0)
+        indicateur = pd.Series(indicateur, index=merged_data.index)
+        
+        # Masque pour valeurs valides (dénominateur > 0 et import_caf non NA)
+        valid_mask = ~invalid_denom_mask & import_caf.notna()
+        
+        # Condition risque vert: indicateur < seuil
+        vert_mask = valid_mask & (indicateur < seuil)
+        
+        # Condition risque avec score: indicateur >= seuil
+        risque_mask = valid_mask & (indicateur >= seuil)
+        
+        # Calcul de l'écart: abs(numerateur - denominateur) * coeff
+        ecart = (np.abs(import_caf - denominateur) * coeff).fillna(0)
+        
+        # Calcul de l'impact
+        impact = pd.Series(0, index=merged_data.index)
+        impact = np.where(ecart < x1, 1, impact)
+        impact = np.where((ecart >= x1) & (ecart < x2), 2, impact)
+        impact = np.where((ecart >= x2) & (ecart < x3), 3, impact)
+        impact = np.where((ecart >= x3) & (ecart < x4), 4, impact)
+        impact = np.where(ecart >= x4, 5, impact)
+        impact = pd.Series(impact, index=merged_data.index)
+        
+        # Calcul du score
+        score = criticite * impact
+        
+        # Déterminer le groupe pour les cas avec risque
+        groupe = ImportExportIndicators._get_groupe_from_score(score, criticite)
+        
+        # Appliquer les résultats
+        # Cas "vert" (indicateur < seuil)
+        risk_df.loc[vert_mask, "RISQUE_IND_4"] = "vert"
+        risk_df.loc[vert_mask, "GAP_IND_4"] = 0
+        risk_df.loc[vert_mask, "SCORE_IND_4"] = 0
+        
+        # Cas avec risque calculé
+        risk_df.loc[risque_mask, "RISQUE_IND_4"] = groupe[risque_mask].values
+        risk_df.loc[risque_mask, "GAP_IND_4"] = ecart[risque_mask].values
+        risk_df.loc[risque_mask, "SCORE_IND_4"] = score[risque_mask].values
 
         return risk_df
 
@@ -184,101 +179,144 @@ class ImportExportIndicators:
     ) -> pd.DataFrame:
         """
         INDICATEUR 5: Cohérence des exportations déclarées TVA vs DGD
-        Logique: MNT_EXPORTATION_DECLARE / EXPORT_CAF >= 1
+        Logique R:
+            MNT_EXPORTATION_DECLARE = OP_NTAXBLE_EXPORTATIONS_09 + OP_NTAXBLE_AUTRES_COMM_EXTERIEUR_VTE_SUSPENSION_TAXE_10
+            indicateur = MNT_EXPORTATION_DECLARE / EXPORT_CAF
+            if (indicateur == seuil) groupe = "vert"  # égalité stricte
+            else calcul écart et score
+        Paramètres: criticite=3, seuil=1, coeff=0.5
         """
+        # Paramètres fixes comme en R
+        criticite = 3
+        seuil = 1
+        coeff = 0.5
+        x1, x2, x3, x4 = 500000, 5000000, 20000000, 100000000
 
-        # Créer les colonnes de résultats si elles n'existent pas
+        # Initialiser les colonnes
         if "RISQUE_IND_5" not in risk_df.columns:
             risk_df["RISQUE_IND_5"] = "Non disponible"
         if "GAP_IND_5" not in risk_df.columns:
-            risk_df["GAP_IND_5"] = 0
+            risk_df["GAP_IND_5"] = 0.0
         if "SCORE_IND_5" not in risk_df.columns:
             risk_df["SCORE_IND_5"] = 0
 
-        def ind5(criticite, numerateur, denominateur, seuil, coeff, x1, x2, x3, x4):
-            if (
-                denominateur != 0
-                and not pd.isna(denominateur)
-                and not pd.isna(numerateur)
-            ):
-                indicateur = numerateur / denominateur
-            else:
-                indicateur = 0
+        # Calculer MNT_EXPORTATION_DECLARE comme en R:
+        # mutate(MNT_EXPORTATION_DECLARE = OP_NTAXBLE_EXPORTATIONS_09 + OP_NTAXBLE_AUTRES_COMM_EXTERIEUR_VTE_SUSPENSION_TAXE_10)
+        op_exportations_09 = pd.to_numeric(
+            merged_data.get("OP_NTAXBLE_EXPORTATIONS_09", 0), errors="coerce"
+        ).fillna(0)
+        op_autres_comm = pd.to_numeric(
+            merged_data.get("OP_NTAXBLE_AUTRES_COMM_EXTERIEUR_VTE_SUSPENSION_TAXE_10", 0), errors="coerce"
+        ).fillna(0)
+        mnt_exportation_declare = op_exportations_09 + op_autres_comm
+        
+        # Récupérer EXPORT_CAF (dénominateur)
+        export_caf = pd.to_numeric(merged_data["EXPORT_CAF"], errors="coerce")
+        
+        # Masque pour dénominateur invalide (null ou 0)
+        invalid_denom_mask = (pd.isna(export_caf) | (export_caf == 0))
+        
+        # Marquer les cas où le ratio n'est pas calculable
+        risk_df.loc[invalid_denom_mask, "RISQUE_IND_5"] = "Ratio non calculable"
+        risk_df.loc[invalid_denom_mask, "GAP_IND_5"] = 0.0
+        risk_df.loc[invalid_denom_mask, "SCORE_IND_5"] = 0
+        
+        # Calculer l'indicateur: MNT_EXPORTATION_DECLARE / EXPORT_CAF
+        indicateur = np.where(
+            (export_caf != 0) & export_caf.notna() & mnt_exportation_declare.notna(),
+            mnt_exportation_declare / export_caf,
+            0
+        )
+        indicateur = pd.Series(indicateur, index=merged_data.index)
+        
+        # Masque pour valeurs valides (dénominateur non nul et non NA, numérateur non NA)
+        valid_mask = ~invalid_denom_mask & mnt_exportation_declare.notna()
+        
+        # Condition risque vert: indicateur == seuil (égalité stricte comme en R)
+        vert_mask = valid_mask & (indicateur == seuil)
+        
+        # Condition risque avec score: indicateur != seuil
+        risque_mask = valid_mask & (indicateur != seuil)
+        
+        # Calcul de l'écart: abs(numerateur - denominateur) * coeff
+        ecart = (np.abs(mnt_exportation_declare - export_caf) * coeff).fillna(0)
+        
+        # Calcul de l'impact
+        impact = pd.Series(0, index=merged_data.index)
+        impact = np.where(ecart < x1, 1, impact)
+        impact = np.where((ecart >= x1) & (ecart < x2), 2, impact)
+        impact = np.where((ecart >= x2) & (ecart < x3), 3, impact)
+        impact = np.where((ecart >= x3) & (ecart < x4), 4, impact)
+        impact = np.where(ecart >= x4, 5, impact)
+        impact = pd.Series(impact, index=merged_data.index)
+        
+        # Calcul du score
+        score = criticite * impact
+        
+        # Déterminer le groupe pour les cas avec risque
+        groupe = ImportExportIndicators._get_groupe_from_score(score, criticite)
+        
+        # Appliquer les résultats
+        # Cas "vert" (indicateur == seuil, égalité stricte)
+        risk_df.loc[vert_mask, "RISQUE_IND_5"] = "vert"
+        risk_df.loc[vert_mask, "GAP_IND_5"] = 0
+        risk_df.loc[vert_mask, "SCORE_IND_5"] = 0
+        
+        # Cas avec risque calculé (indicateur != seuil)
+        risk_df.loc[risque_mask, "RISQUE_IND_5"] = groupe[risque_mask].values
+        risk_df.loc[risque_mask, "GAP_IND_5"] = ecart[risque_mask].values
+        risk_df.loc[risque_mask, "SCORE_IND_5"] = score[risque_mask].values
 
-            if indicateur >= seuil:
-                groupe = "vert"
-                ecart = 0
-                score = 0
-                return [ecart, groupe, score]
-            else:
-                ecart = abs(denominateur - numerateur)
-                ecart = ecart * coeff
+        return risk_df
 
-                if ecart < x1:
-                    impact = 1
-                elif ecart < x2:
-                    impact = 2
-                elif ecart < x3:
-                    impact = 3
-                elif ecart < x4:
-                    impact = 4
-                else:
-                    impact = 5
+    @staticmethod
+    def calculate_indicator_7(
+        merged_data: pd.DataFrame, risk_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """
+        INDICATEUR 7: Nombre de titres d'importation/exportation
+        
+        Logique R:
+            INDICATEUR 7_A: if (EXPORT_NOMBRE_TITRE > 5) "rouge" else "vert"
+            INDICATEUR 7_B: if (IMPORT_NOMBRE_TITRE > 5) "rouge" else "vert"
+            
+        Entreprises avec plus de 5 titres d'export ou d'import
+        """
+        # Initialiser les colonnes si elles n'existent pas
+        if "RISQUE_IND_7_A" not in risk_df.columns:
+            risk_df["RISQUE_IND_7_A"] = "Non disponible"
+        if "RISQUE_IND_7_B" not in risk_df.columns:
+            risk_df["RISQUE_IND_7_B"] = "Non disponible"
 
-                score = criticite * impact
-
-                # Détermination du groupe
-                if score in [1, 2, 3, 4]:
-                    groupe = "vert"
-                elif score == 5:
-                    groupe = "vert" if criticite == 1 else "jaune"
-                elif score == 6:
-                    groupe = "vert" if criticite == 2 else "jaune"
-                elif score in [8, 9]:
-                    groupe = "jaune"
-                elif score == 10:
-                    groupe = "jaune" if criticite == 2 else "rouge"
-                elif score in [12, 16]:
-                    groupe = "orange"
-                elif score == 15:
-                    groupe = "orange" if criticite == 3 else "rouge"
-                elif score in [20, 25]:
-                    groupe = "rouge"
-                else:
-                    groupe = "vert"
-
-                return [ecart, groupe, score]
-
-        # Application du calcul
-        for i in range(len(merged_data)):
-            mnt_exportation_declare = merged_data.iloc[i].get(
-                "OP_NTAXBLE_EXPORTATIONS", 0
-            )
-            export_caf = merged_data.iloc[i].get("EXPORT_CAF", 0)
-            numero_ifu = merged_data.iloc[i].get("NUM_IFU", "")
-            annee = merged_data.iloc[i].get("ANNEE", "")
-
-            if not pd.isna(mnt_exportation_declare) and not pd.isna(export_caf):
-                result = ind5(
-                    3,
-                    mnt_exportation_declare,
-                    export_caf,
-                    1,
-                    0.5,
-                    500000,
-                    5000000,
-                    20000000,
-                    100000000,
-                )
-                # Cibler avec NUM_IFU et ANNEE
-                mask = (risk_df["NUM_IFU"] == numero_ifu) & (risk_df["ANNEE"] == annee)
-                risk_df.loc[mask, "RISQUE_IND_5"] = result[1]
-                risk_df.loc[mask, "GAP_IND_5"] = result[0]
-                risk_df.loc[mask, "SCORE_IND_5"] = result[2]
-            else:
-                mask = (risk_df["NUM_IFU"] == numero_ifu) & (risk_df["ANNEE"] == annee)
-                risk_df.loc[mask, "RISQUE_IND_5"] = "Non disponible"
-                risk_df.loc[mask, "GAP_IND_5"] = 0
-                risk_df.loc[mask, "SCORE_IND_5"] = 0
+        # Récupérer les données
+        export_nombre_titre = pd.to_numeric(
+            merged_data.get("EXPORT_NOMBRE_TITRE"), errors="coerce"
+        )
+        import_nombre_titre = pd.to_numeric(
+            merged_data.get("IMPORT_NOMBRE_TITRE"), errors="coerce"
+        )
+        
+        # ===== INDICATEUR 7_A: Nombre de titres d'exportation =====
+        # Condition valide (non NA)
+        valid_mask_7a = export_nombre_titre.notna()
+        
+        # Condition de risque rouge: EXPORT_NOMBRE_TITRE > 5
+        risque_rouge_7a = export_nombre_titre > 5
+        
+        # Appliquer les résultats
+        risk_df.loc[valid_mask_7a, "RISQUE_IND_7_A"] = "vert"
+        risk_df.loc[valid_mask_7a & risque_rouge_7a, "RISQUE_IND_7_A"] = "rouge"
+        
+        # ===== INDICATEUR 7_B: Nombre de titres d'importation =====
+        # Note: En R, la condition NA est sur EXPORT_NOMBRE_TITRE mais le test est sur IMPORT_NOMBRE_TITRE
+        # Ici on corrige pour vérifier IMPORT_NOMBRE_TITRE pour la cohérence
+        valid_mask_7b = import_nombre_titre.notna()
+        
+        # Condition de risque rouge: IMPORT_NOMBRE_TITRE > 5
+        risque_rouge_7b = import_nombre_titre > 5
+        
+        # Appliquer les résultats
+        risk_df.loc[valid_mask_7b, "RISQUE_IND_7_B"] = "vert"
+        risk_df.loc[valid_mask_7b & risque_rouge_7b, "RISQUE_IND_7_B"] = "rouge"
 
         return risk_df

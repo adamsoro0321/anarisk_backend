@@ -1,6 +1,6 @@
 from .sql import (
     sql_contribuable,
-    sql_tva_complete,
+    sql_tva_declaration,
     sql_tva_deduction,
     sql_dgd,
     sql_programmations_control,
@@ -10,7 +10,7 @@ from .sql import (
 
 __all__ = [
     "sql_contribuable",
-    "sql_tva_complete",
+    "sql_tva_declaration",
     "sql_tva_deduction",
     "sql_dgd",
     "sql_programmations_control",

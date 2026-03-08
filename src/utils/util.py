@@ -1,3 +1,45 @@
+import os
+import glob
+import re
+from pathlib import Path
+
+
+def get_latest_risk_file(directory: str = "../data/risk_contribuables") -> str | None:
+    """
+    Recherche et retourne le fichier RISK_INDICATEUR_CONTRIBUABLES le plus récent
+    dans le répertoire spécifié, basé sur la date dans le nom du fichier.
+    
+    Args:
+        directory: Chemin du répertoire à parcourir (par défaut "../data")
+        
+    Returns:
+        Chemin complet du fichier le plus récent, ou None si aucun fichier trouvé
+        
+    Example:
+        Si le répertoire contient:
+        - RISK_INDICATEUR_CONTRIBUABLES_20251217.csv
+        - RISK_INDICATEUR_CONTRIBUABLES_20251218.csv
+        - RISK_INDICATEUR_CONTRIBUABLES_20251219.csv
+        
+        La fonction retournera RISK_INDICATEUR_CONTRIBUABLES_20251219.csv
+    """
+    pattern = os.path.join(directory, "RISK_INDICATEUR_CONTRIBUABLES_*.csv")
+    files = glob.glob(pattern)
+    
+    if not files:
+        return None
+    
+    # Extraire la date du nom de fichier et trier
+    def extract_date(filepath: str) -> str:
+        filename = os.path.basename(filepath)
+        match = re.search(r'RISK_INDICATEUR_CONTRIBUABLES_(\d{8})\.csv', filename)
+        return match.group(1) if match else "00000000"
+    
+    # Trier par la date dans le nom du fichier (le plus récent en premier)
+    latest_file = max(files, key=extract_date)
+    return os.path.basename(latest_file)
+
+
 BASE_COLUMNS = [
     "NUM_IFU",
     "ANNEE",
@@ -122,129 +164,3 @@ LABEL_COLUMNS = {
     "RISQUE_IND_49": "Indicateur 49",
     "Actions": "Actions",
 }
-
-COLS_DAG = [
-    {
-        "field": "NUM_IFU",
-        "headerName": "Numéro IFU",
-        "showDefault": True,
-        "filter": True,
-        "lockPosition": "left",
-    },
-    {"field": "ANNEE", "headerName": "Année", "filter": True, "showDefault": True},
-    {"field": "CODE_STRUCTURE", "headerName": "Code Structure", "showDefault": False},
-    {
-        "field": "LIBELLE_STRUCTURE",
-        "headerName": "Libellé Structure",
-        "showDefault": False,
-    },
-    {"field": "RAISON_SOCIALE", "headerName": "Raison Sociale", "showDefault": False},
-    {"field": "PERIODE_FISCALE", "headerName": "Période Fiscale", "showDefault": False},
-    {"field": "ETAT", "headerName": "État", "showDefault": False},
-    {"field": "REGIME_FISCALE", "headerName": "Régime Fiscal", "showDefault": False},
-    {
-        "field": "DATE_DEBUT_ACTIVITE",
-        "headerName": "Date Début Activité",
-        "showDefault": False,
-    },
-    {
-        "field": "SECTEUR_ACTIVITE",
-        "headerName": "Secteur d'Activité",
-        "showDefault": False,
-    },
-    {"field": "TYPE_CONTROLE", "headerName": "Type de Contrôle", "showDefault": False},
-    {"field": "FORME_JURIDIQUE", "headerName": "Forme Juridique", "showDefault": False},
-    {"field": "HIERARCHIE_2", "headerName": "Hiérarchie 2", "showDefault": False},
-    {"field": "HIERARCHIE_3", "headerName": "Hiérarchie 3", "showDefault": False},
-    # indicateur 1
-    {"field": "RISQUE_IND_1", "headerName": "Indicateur 1", "showDefault": False},
-    {"field": "GAP_IND_1", "headerName": "Écart Indicateur 1", "showDefault": False},
-    {"field": "SCORE_IND_1", "headerName": "Score Indicateur 1", "showDefault": False},
-    # indicateur 2
-    {"field": "RISQUE_IND_2", "headerName": "Indicateur 2", "showDefault": False},
-    {"field": "GAP_IND_2", "headerName": "Écart Indicateur 2", "showDefault": False},
-    {"field": "SCORE_IND_2", "headerName": "Score Indicateur 2", "showDefault": False},
-    # indicateur 3
-    {"field": "RISQUE_IND_3", "headerName": "Indicateur 3", "showDefault": False},
-    {"field": "GAP_IND_3", "headerName": "Écart Indicateur 3", "showDefault": False},
-    {
-        "field": "AGE_MOIS_IND_3",
-        "headerName": "Âge en Mois Indicateur  3",
-        "showDefault": False,
-    },
-    # indicateur 4
-    {"field": "RISQUE_IND_4", "headerName": "Indicateur 4", "showDefault": False},
-    {"field": "GAP_IND_4", "headerName": "Écart Indicateur 4", "showDefault": False},
-    {"field": "SCORE_IND_4", "headerName": "Score Indicateur 4", "showDefault": False},
-    # indicateur 5
-    {"field": "RISQUE_IND_5", "headerName": "Indicateur 5", "showDefault": False},
-    {"field": "GAP_IND_5", "headerName": "Écart Indicateur 5", "showDefault": False},
-    {"field": "SCORE_IND_5", "headerName": "Score Indicateur 5", "showDefault": False},
-    # indicateur 12
-    {"field": "RISQUE_IND_12", "headerName": "Indicateur 12", "showDefault": False},
-    {"field": "GAP_IND_12", "headerName": "Écart Indicateur 12", "showDefault": False},
-    {
-        "field": "SCORE_IND_12",
-        "headerName": "Score Indicateur 12",
-        "showDefault": False,
-    },
-    # indicateur 8
-    {"field": "RISQUE_IND_8", "headerName": "Indicateur 8", "showDefault": False},
-    {"field": "GAP_IND_8", "headerName": "Écart Indicateur 8", "showDefault": False},
-    {"field": "SCORE_IND_8", "headerName": "Score Indicateur 8", "showDefault": False},
-    # indicateur 13
-    {"field": "RISQUE_IND_13", "headerName": "Indicateur 13", "showDefault": False},
-    {"field": "GAP_IND_13", "headerName": "Écart Indicateur 13", "showDefault": False},
-    {
-        "field": "SCORE_IND_13",
-        "headerName": "Score Indicateur 13",
-        "showDefault": False,
-    },
-    # indicateur 14
-    {"field": "RISQUE_IND_14", "headerName": "Indicateur 14", "showDefault": False},
-    {"field": "GAP_IND_14", "headerName": "Écart Indicateur 14", "showDefault": False},
-    {
-        "field": "SCORE_IND_14",
-        "headerName": "Score Indicateur 14",
-        "showDefault": False,
-    },
-    # indicateur 20
-    {"field": "RISQUE_IND_20", "headerName": "Indicateur 20", "showDefault": False},
-    {"field": "GAP_IND_20", "headerName": "Écart Indicateur 20", "showDefault": False},
-    {
-        "field": "SCORE_IND_20",
-        "headerName": "Score Indicateur 20",
-        "showDefault": False,
-    },
-    # indicateur 27
-    {"field": "RISQUE_IND_27", "headerName": "Indicateur 27", "showDefault": False},
-    {"field": "RISQUE_IND_15_A", "headerName": "Indicateur 15A", "showDefault": False},
-    {"field": "RISQUE_IND_15_B", "headerName": "Indicateur 15B", "showDefault": False},
-    {"field": "RISQUE_IND_16", "headerName": "Indicateur 16", "showDefault": False},
-    {"field": "RISQUE_IND_38", "headerName": "Indicateur 38", "showDefault": False},
-    {"field": "RISQUE_IND_39", "headerName": "Indicateur 39", "showDefault": False},
-    {"field": "RISQUE_IND_46", "headerName": "Indicateur 46", "showDefault": False},
-    {"field": "RISQUE_IND_47", "headerName": "Indicateur 47", "showDefault": False},
-    {"field": "RISQUE_IND_49", "headerName": "Indicateur 49", "showDefault": False},
-    {
-        "field": "Actions",
-        "headerName": "Actions",
-        "showDefault": True,
-        "lockPosition": "right",
-        "cellRenderer": "actionsRenderer",
-        "cellRendererParams": {
-            "actions": [
-                {
-                    "icon": "fas fa-file-alt",
-                    "label": "Générer une fiche individuelle",
-                    "callback": "function(params) { generateFiche(params.data.NUM_IFU); }",
-                },
-                {
-                    "icon": "fas fa-eye",
-                    "label": "Voir les détails",
-                    "callback": "function(params) { alert('Voir détails pour IFU: ' + params.data.NUM_IFU); }",
-                }
-            ]
-        },
-    },
-]

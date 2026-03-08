@@ -8,5 +8,16 @@ venv/
 venv-w/
 .idea/
 *.swp
-data/
-outputs/
+
+# Keep these directories tracked, but ignore their contents
+/data/*
+!/data/.gitkeep
+
+/output/*
+!/output/.gitkeep
+
+/programmes/*
+!/programmes/.gitkeep
+
+/docs/*
+!/docs/.gitkeep

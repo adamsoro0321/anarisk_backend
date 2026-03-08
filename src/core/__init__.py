@@ -1,4 +1,20 @@
 from .data_loader import DataLoader
 from .risk_compute import RiskComputer
+from .sql import (
+    sql_contribuable,
+    sql_tva_declaration,
+    sql_tva_deduction,
+    sql_dgd,
+    sql_programmations_control,
+    sql_benefices_complete,
+    sql_insd,
+)
 
-__all__ = ["DataLoader", "RiskComputer"]
+__all__ = ["DataLoader", 
+           "RiskComputer", "sql_contribuable",
+    "sql_tva_declaration",
+    "sql_tva_deduction",
+    "sql_dgd",
+    "sql_programmations_control",
+    "sql_benefices_complete",
+    "sql_insd"]

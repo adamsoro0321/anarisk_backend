@@ -14,9 +14,9 @@ from datetime import datetime
 import warnings
 import os
 
-from queries import (
+from .sql import (
     sql_contribuable,
-    sql_tva_complete,
+    sql_tva_declaration,
     sql_tva_deduction,
     sql_dgd,
     sql_programmations_control,
@@ -60,11 +60,9 @@ class DataLoader:
         self.logger = logging.getLogger(__name__)
         self.IS_LOCAL_MODE = False
         self.non_eligible_list = []
-      
-
         # Charger les fichiers de référence
         self.load_reference_data()
- 
+
     def load_reference_data(self):
         """Charger tous les fichiers de référence utilisés par les scripts R"""
         self.logger.info("Chargement des données de référence...")
@@ -137,7 +135,7 @@ class DataLoader:
         Extraction complète des données Oracle selon la logique des scripts R
         Reproduit l'extraction du script 00_Extraction_transformation_v2.R
         """
-        self.logger.info("=== EXTRACTION COMPLÈTE ORACLE (Reproduction Scripts R) ===")
+        self.logger.info(" 1.=== EXTRACTION COMPLÈTE ORACLE (Reproduction Scripts R) ===")
 
         with self.oracle_engine.connect() as connection:
             data = {}
@@ -193,21 +191,6 @@ class DataLoader:
         contribuables = contribuables[contribuables["NUM_IFU"].notna()]
         contribuables = contribuables[contribuables["NUM_IFU"].str.strip() != ""]
 
-        # Appliquer les exclusions en Python pour éviter la limite Oracle IN (1000)
-        if self.non_eligible_list:
-            before_exclusion = len(contribuables)
-            # Convertir en set pour une recherche plus rapide
-            non_eligible_set = set(self.non_eligible_list)
-            contribuables = contribuables[
-                ~contribuables["NUM_IFU"].isin(non_eligible_set)
-            ]
-            after_exclusion = len(contribuables)
-
-            self.logger.info(
-                f"Exclusions appliquées: {before_exclusion - after_exclusion} IFU exclus "
-                f"({len(self.non_eligible_list)} dans la liste d'exclusion)"
-            )
-
         elapsed_time = time.time() - start_time
         final_count = len(contribuables)
 
@@ -224,7 +207,7 @@ class DataLoader:
             if self.IS_LOCAL_MODE:
                 bd_tva = pd.read_csv(f"{self.DATA_DIR}/bd_tva_complete.csv")
             else:
-                bd_tva = pd.read_sql(sql_tva_complete, connection)
+                bd_tva = pd.read_sql(sql_tva_declaration, connection)
                 bd_tva.to_csv(
                     f"{self.DATA_DIR}/bd_tva_complete.csv", index=False, encoding="utf-8"
                  )
@@ -239,7 +222,6 @@ class DataLoader:
         except Exception as e:
             self.logger.error(f"Erreur lors de l'extraction DGD: {e}")
             return pd.DataFrame()
-        
 
     def _extract_dcf_tva_deduction(self, connection) -> pd.DataFrame:
         """Extraction des déductions TVA détaillées"""
@@ -268,7 +250,7 @@ class DataLoader:
         except Exception as e:
             self.logger.warning(f"Erreur extraction DCF_TVA_DEDUCTION: {e}")
             return pd.DataFrame()
-   
+
     def _extract_dgd_complete_with_nomenclature(self, connection) -> pd.DataFrame:
         """Extraction complète des données DGD avec nomenclature SH"""
         self.logger.info("Extraction DGD complète avec nomenclature")
@@ -297,69 +279,6 @@ class DataLoader:
         except Exception as e:
             self.logger.error(f"Erreur lors de l'extraction DGD: {e}")
             return pd.DataFrame()
-        
-    def _extract_dgd_complete_with_nomenclature_v1(self, connection) -> pd.DataFrame:
-        """Extraction complète des données DGD avec nomenclature SH"""
-        self.logger.info("Extraction DGD complète avec nomenclature")
-
-        try:
-            start_time = time.time()
-            if self.IS_LOCAL_MODE:
-                dgd_data = pd.read_csv(f"{self.DATA_DIR}/dgd_complete.csv")
-            else:
-                dgd_data = pd.read_sql(sql_dgd, connection)
-
-                dgd_data.to_csv(
-                    f"{self.DATA_DIR}/dgd_complete.csv", index=False, encoding="utf-8"
-                )
-                dgd_data.drop_duplicates(inplace=True)
-                self.logger.info(
-                    f"DGD extraite de la base Oracle: {len(dgd_data)} lignes"
-                )
-                print(f"DGD extraite de la base Oracle: {len(dgd_data)} lignes")
-            dgd_data.columns = dgd_data.columns.str.upper()
-
-            dgd_data["ANNEE"] = dgd_data["DATE_LIQUIDATION"].astype(str).str[:4]
-            dgd_data["TVA"] = dgd_data["TVA"].fillna(0)
-
-            if "NOMENCLATURE10" in dgd_data.columns:
-                dgd_data["CODE_CHAPITRE"] = (
-                    dgd_data["NOMENCLATURE10"].astype(str).str[:2]
-                )
-                if not self.nomenclature_sh.empty:
-                    try:
-                        nomenclature = self.nomenclature_sh.copy()
-                        if "Code_Chapitre" in nomenclature.columns:
-                            nomenclature["Code_Chapitre"] = nomenclature[
-                                "Code_Chapitre"
-                            ].apply(
-                                lambda x: str(int(x))
-                                if pd.notna(x) and int(x) > 9
-                                else f"0{int(x)}"
-                                if pd.notna(x)
-                                else ""
-                            )
-                            dgd_data = dgd_data.merge(
-                                nomenclature,
-                                left_on="CODE_CHAPITRE",
-                                right_on="Code_Chapitre",
-                                how="left",
-                            )
-                            self.logger.info("Nomenclature fusionnée sur Code_Chapitre")
-                    except Exception as e:
-                        self.logger.warning(
-                            f"Erreur lors de la fusion nomenclature: {e}"
-                        )
-
-            elapsed_time = time.time() - start_time
-            self.logger.info(
-                f"DGD complète extraite: {len(dgd_data)} lignes en {elapsed_time:.2f}s"
-            )
-            return dgd_data
-
-        except Exception as e:
-            self.logger.error(f"Erreur lors de l'extraction DGD: {e}")
-            return pd.DataFrame()    
 
     def _extract_programmation_controles(self, connection) -> pd.DataFrame:
         """Extraction des données de programmation et contrôles"""
@@ -428,7 +347,8 @@ class DataLoader:
             if self.IS_LOCAL_MODE:
                 insd_data = pd.read_csv(f"{self.DATA_DIR}/insd_data.csv")
             else:
-                insd_data = pd.read_sql(sql_insd, connection)
+                #insd_data = pd.read_sql(sql_insd, connection)
+                insd_data = pd.read_excel(f"{self.DATA_DIR}/BASE_DONNEES_INSD.xlsx")
                 insd_data.to_csv(
                     f"{self.DATA_DIR}/insd_data.csv", index=False, encoding="utf-8"
                 )
@@ -445,173 +365,86 @@ class DataLoader:
             self.logger.warning(f"Erreur extraction INSD: {e}")
             return pd.DataFrame()
 
+    def _normalize_annee_column(self, df: pd.DataFrame, column_name: str = "ANNEE") -> pd.DataFrame:
+        """Normalise la colonne ANNEE en string pour assurer la compatibilité des merges"""
+        if column_name in df.columns:
+            df[column_name] = df[column_name].astype(str).str.strip()
+        return df
+
     def merge_all_data(self, extracted_data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
         """Fusion de toutes les données extraites"""
-        self.logger.info("=== FUSION DES DONNÉES ===")
+        self.logger.info("2.=== FUSION DES DONNÉES ===")
 
-        # Commencer par les contribuables comme base
+        # Normaliser la colonne ANNEE dans tous les DataFrames avant les merges
+        for key in ["contribuables","bd_tva", "tva_deductions", "dgd_data", "insd","benefices"]:
+            if key in extracted_data and not extracted_data[key].empty:
+                extracted_data[key] = self._normalize_annee_column(extracted_data[key])
+                self.logger.debug(f"Colonne ANNEE normalisée pour {key}")
+
+        # 1.recuperation de la table contribuables
         merged_data = extracted_data["contribuables"].copy()
-
-        # Fusionner progressivement chaque source de données
-        if not extracted_data["bd_tva"].empty:
-            merged_data = merged_data.merge(
-                extracted_data["bd_tva"], on="NUM_IFU", how="left"
+        # 2. Fusion avec BD_TVA
+        if "bd_tva" in extracted_data:
+            merged_data = pd.merge(
+                merged_data,
+                extracted_data["bd_tva"],
+                on=["NUM_IFU"],
+                how="left",
             )
-
-        if not extracted_data["dgd_data"].empty:
-            # Agrégation des données DGD par IFU selon la logique R
-            dgd_aggregated = self._aggregate_dgd_data(extracted_data["dgd_data"])
-            merged_data = merged_data.merge(
-                dgd_aggregated, left_on="NUM_IFU", right_on="NUM_IFU", how="left"
+            self.logger.info(f"Fusion avec BD_TVA: {len(merged_data)} lignes")
+        if "tva_deductions" in extracted_data:
+            merged_data = pd.merge(
+                merged_data,
+                extracted_data["tva_deductions"],
+                on=["NUM_IFU", "ANNEE"],
+                how="outer",
             )
-
-        if not extracted_data["benefices"].empty:
-            merged_data = merged_data.merge(
-                extracted_data["benefices"], on="NUM_IFU", how="left"
+            self.logger.info(f"Fusion avec DCF_TVA_DEDUCTION: {len(merged_data)} lignes") 
+        if "dgd_data" in extracted_data:
+            merged_data = pd.merge(
+                merged_data,
+                extracted_data["dgd_data"],
+                on=["NUM_IFU", "ANNEE"],
+                how="outer",
             )
-
-        if not extracted_data["programmation"].empty:
-            merged_data = merged_data.merge(
-                extracted_data["programmation"], on="NUM_IFU", how="left"
+            self.logger.info(f"Fusion avec DGD: {len(merged_data)} lignes")
+        if "programmation" in extracted_data:
+            extracted_data["programmation"]["DATE_IMMAT"] = extracted_data["programmation"]["DATE_IMMAT"].astype(str).str.strip()
+            merged_data = pd.merge(
+                merged_data,
+                extracted_data["programmation"],
+                on=["NUM_IFU","NOM_MINEFID","DATE_IMMAT"],
+                how="left",
             )
+            self.logger.info(f"Fusion avec Programmation|controlle: {len(merged_data)} lignes")
 
-        self.logger.info(
-            f"Données fusionnées: {len(merged_data)} lignes, {len(merged_data.columns)} colonnes"
-        )
+        if 'benefices' in extracted_data:
+            extracted_data["benefices"]["ANNEE_FISCAL"] = extracted_data["benefices"]["ANNEE_FISCAL"].astype(str).str.strip()
+            merged_data = pd.merge(
+                merged_data,
+                extracted_data["benefices"],
+                left_on=["NUM_IFU","ANNEE"],
+                right_on=["NUM_IFU","ANNEE_FISCAL"],
+                how="outer",
+            )
+            self.logger.info(f"Fusion avec Bénéfices: {len(merged_data)} lignes")
+        if 'insd' in extracted_data:
+            merged_data = pd.merge(
+                merged_data,
+                extracted_data["insd"],
+                left_on=["NUM_IFU","ANNEE"],
+                right_on=["NUM_IFU_CONTRIBUABLE","ANNEE"],
+                how="outer",
+            )
+            self.logger.info(f"Fusion avec INSD: {len(merged_data)} lignes")
+
         merged_data.to_csv(
-            f"{self.DATA_DIR}/merged_data.csv", index=False, encoding="utf-8"
+            f"{self.DATA_DIR}/merged_data/merged_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", index=False, encoding="utf-8"
         )
 
         return merged_data
 
-    def _aggregate_dgd_data(self, dgd_data: pd.DataFrame) -> pd.DataFrame:
-        """Agrégation des données DGD par IFU selon la logique R"""
 
-        # Vérifier si nous avons des données et les colonnes nécessaires
-        required_columns = ["IFU", "DATE_LIQUIDATION", "FLUX", "CAF", "FOB", "TVA"]
-        available_columns = [col for col in required_columns if col in dgd_data.columns]
-
-        if dgd_data.empty or len(available_columns) < 3:
-            self.logger.warning(
-                f"Données DGD insuffisantes. Colonnes disponibles: {available_columns}"
-            )
-            # Retourner un DataFrame vide avec les colonnes attendues
-            return pd.DataFrame(
-                columns=[
-                    "NUM_IFU",
-                    "ANNEE",
-                    "IMPORT_CAF",
-                    "IMPORT_FOB",
-                    "IMPORT_TVA",
-                    "EXPORT_CAF",
-                    "EXPORT_FOB",
-                    "EXPORT_TVA",
-                ]
-            )
-
-        try:
-            # Reproduire la logique R : DGD$ANNEE=substr(DGD$DATE_LIQUIDATION,1,4)
-            if "DATE_LIQUIDATION" in dgd_data.columns:
-                dgd_data["ANNEE"] = dgd_data["DATE_LIQUIDATION"].astype(str).str[:4]
-
-            # Préparer les colonnes avec des valeurs par défaut
-            for col in ["CAF", "FOB", "TVA"]:
-                if col not in dgd_data.columns:
-                    dgd_data[col] = 0
-
-            # Reproduire : DGD_AN=aggregate(cbind(CAF, FOB, TVA)~IFU+FLUX+ANNEE,DGD,sum)
-            dgd_an = (
-                dgd_data.groupby(["IFU", "FLUX", "ANNEE"])
-                .agg({"CAF": "sum", "FOB": "sum", "TVA": "sum"})
-                .reset_index()
-            )
-
-            # Reproduire : DGD_AN_IMPORT=subset(DGD_AN,DGD_AN$FLUX=="I")
-            dgd_an_import = dgd_an[dgd_an["FLUX"] == "I"].copy()
-            if not dgd_an_import.empty:
-                dgd_an_import.columns = [
-                    "NUM_IFU",
-                    "FLUX",
-                    "ANNEE",
-                    "IMPORT_CAF",
-                    "IMPORT_FOB",
-                    "IMPORT_TVA",
-                ]
-                dgd_an_import = dgd_an_import[
-                    ["NUM_IFU", "ANNEE", "IMPORT_CAF", "IMPORT_FOB", "IMPORT_TVA"]
-                ]
-            else:
-                dgd_an_import = pd.DataFrame(
-                    columns=[
-                        "NUM_IFU",
-                        "ANNEE",
-                        "IMPORT_CAF",
-                        "IMPORT_FOB",
-                        "IMPORT_TVA",
-                    ]
-                )
-
-            # Reproduire : DGD_AN_EXPORT=subset(DGD_AN,DGD_AN$FLUX=="E")
-            dgd_an_export = dgd_an[dgd_an["FLUX"] == "E"].copy()
-            if not dgd_an_export.empty:
-                dgd_an_export.columns = [
-                    "NUM_IFU",
-                    "FLUX",
-                    "ANNEE",
-                    "EXPORT_CAF",
-                    "EXPORT_FOB",
-                    "EXPORT_TVA",
-                ]
-                dgd_an_export = dgd_an_export[
-                    ["NUM_IFU", "ANNEE", "EXPORT_CAF", "EXPORT_FOB", "EXPORT_TVA"]
-                ]
-            else:
-                dgd_an_export = pd.DataFrame(
-                    columns=[
-                        "NUM_IFU",
-                        "ANNEE",
-                        "EXPORT_CAF",
-                        "EXPORT_FOB",
-                        "EXPORT_TVA",
-                    ]
-                )
-
-            # Reproduire : DGD_IMPORT_EXPORT=full_join(DGD_AN_IMPORT,DGD_AN_EXPORT,by=c("NUM_IFU","ANNEE"))
-            if not dgd_an_import.empty or not dgd_an_export.empty:
-                dgd_import_export = pd.merge(
-                    dgd_an_import, dgd_an_export, on=["NUM_IFU", "ANNEE"], how="outer"
-                )
-                dgd_import_export = dgd_import_export.fillna(0)
-            else:
-                dgd_import_export = pd.DataFrame(
-                    columns=[
-                        "NUM_IFU",
-                        "ANNEE",
-                        "IMPORT_CAF",
-                        "IMPORT_FOB",
-                        "IMPORT_TVA",
-                        "EXPORT_CAF",
-                        "EXPORT_FOB",
-                        "EXPORT_TVA",
-                    ]
-                )
-
-            return dgd_import_export
-
-        except Exception as e:
-            self.logger.error(f"Erreur lors de l'agrégation DGD: {e}")
-            return pd.DataFrame(
-                columns=[
-                    "NUM_IFU",
-                    "ANNEE",
-                    "IMPORT_CAF",
-                    "IMPORT_FOB",
-                    "IMPORT_TVA",
-                    "EXPORT_CAF",
-                    "EXPORT_FOB",
-                    "EXPORT_TVA",
-                ]
-            )
 
     def export_results(
         self, results_data: pd.DataFrame, summary: Dict, base_filename: str = None
@@ -653,14 +486,25 @@ class DataLoader:
         except Exception as e:
             self.logger.error(f"Erreur lors de l'export: {e}")
 
-    def run_full_analysis(self) -> pd.DataFrame:
+
+
+    def run_extract_merge(self) -> pd.DataFrame:
         """Exécute l'analyse complète de bout en bout"""
-        self.logger.info("=== DÉBUT DE L'ANALYSE COMPLÈTE ===")
+        self.logger.info("=== EXTRACTION & FUSION ===")
+        start_time = time.time()
 
         # Étape 1: Extraction des données
         extracted_data = self.extract_complete_oracle_data()
+        extracted_time = time.time() - start_time
+        self.logger.info(
+            f"Étape d'extraction terminée en {extracted_time:.2f}s"
+        )
 
         # Étape 2: Fusion des données
         merged_data = self.merge_all_data(extracted_data)
+        merged_time = time.time() - start_time - extracted_time
+        self.logger.info(
+            f"Étape de fusion terminée en {merged_time:.2f}s"
+        )
 
         return merged_data

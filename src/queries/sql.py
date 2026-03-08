@@ -17,7 +17,7 @@ sql_contribuable = text("""
 """)
 
 # 2.
-sql_tva_complete = """
+sql_tva_declaration = """
        WITH tva_base AS (
             SELECT 
                 NUM_IFU, NOM, ANNEE_FISCAL, MOIS_FISCAL,
@@ -329,7 +329,7 @@ sql_programmations_control = """
                     ID_CONTR, TYPE_CONTROLE, MAX(DATE_PROGR) as DATE_DERNIERE_VG
                 FROM SID_PROGRAMME_VERIFICATION 
                 WHERE TYPE_CONTROLE = 'GENERAL'
-                GROUP BY ID_CONTR, TYPE_CONTROLE
+                GROUP BY ID_CONTR, NUM_IFU, TYPE_CONTROLE
             ),
             vp_data AS (
                 SELECT  
@@ -360,88 +360,163 @@ sql_programmations_control = """
                 FROM SID_CORRESPONDANCE_BRIGADE
                 WHERE CODE_TYP_COR = 4
                 GROUP BY ID_CONTR
+            ),
+            programmation_with_ifu AS (
+                SELECT 
+                    pc.ID_CONTR,
+                    ci.NUM_IFU,
+                    ci.DATE_IMMAT,
+                    pc.DATE_DERNIERE_VG,
+                    pc.DATE_DERNIERE_VP,
+                    ci.NOM_MINEFID
+                FROM prog_combined pc
+                LEFT JOIN contrib_info ci ON pc.ID_CONTR = ci.ID_CONTR
             )
-            SELECT 
-                ci.NUM_IFU, ci.DATE_IMMAT, ci.NOM_MINEFID,
-                pc.DATE_DERNIERE_VG, pc.DATE_DERNIERE_VP,
-                ad.DATE_DERNIERE_AVIS, ad.DERNIERE_GESTION_SOUMIS_VERIF
-            FROM contrib_info ci
-            LEFT JOIN prog_combined pc ON ci.ID_CONTR = pc.ID_CONTR
-            LEFT JOIN avis_data ad ON ci.ID_CONTR = ad.ID_CONTR
-            WHERE ci.NUM_IFU IS NOT NULL
+            SELECT DISTINCT
+                pwi.NUM_IFU, 
+                pwi.DATE_IMMAT, 
+                pwi.DATE_DERNIERE_VG, 
+                pwi.DATE_DERNIERE_VP,
+                pwi.NOM_MINEFID,
+                ad.DATE_DERNIERE_AVIS, 
+                ad.DERNIERE_GESTION_SOUMIS_VERIF
+            FROM programmation_with_ifu pwi
+            FULL OUTER JOIN avis_data ad ON pwi.ID_CONTR = ad.ID_CONTR
+            WHERE pwi.NUM_IFU IS NOT NULL
+            ORDER BY pwi.NUM_IFU
             """ 
 
 
 # 6.
 sql_benefices_complete = """
-            WITH ibnc_data AS (
-                SELECT 
-                    sid_contribuable.NUM_IFU, 
-                    EXTRACT(YEAR FROM DATE_FIN_PERIODE) as ANNEE_FISCAL,
-                    sid_element_liquidation.CODE_ELT_LIQ, 
-                    sid_det_ele_liquidations.VALEUR_NUMERIQUE
-                FROM sid_element_liquidation, sid_det_ele_liquidations,
-                     sid_contribuable, sid_titre_recette, sid_impot, sid_periode_fiscale
-                WHERE sid_det_ele_liquidations.CODE_ELT_LIQ = sid_element_liquidation.CODE_ELT_LIQ
-                  AND sid_det_ele_liquidations.ID_IMPOT = sid_impot.ID_IMPOT
-                  AND sid_impot.CODE_TITRE = sid_titre_recette.CODE_TITRE
-                  AND sid_titre_recette.ID_CONTR = sid_contribuable.ID_CONTR
-                  AND sid_det_ele_liquidations.CODE_NAT_IMP = '27'
-                  AND sid_impot.ID_CAL_FISC = sid_periode_fiscale.CODE_CAL_FISC
-                  AND sid_periode_fiscale.EXERCICE_GESTION > '2018'
-                  AND sid_titre_recette.ETAT_ACTUEL != 'ANNULE'
+            WITH ibnc_pivot AS (
+                SELECT * FROM (
+                    SELECT sid_contribuable.NUM_IFU, 
+                           EXTRACT(YEAR FROM DATE_FIN_PERIODE) as ANNEE_FISCAL,
+                           sid_element_liquidation.CODE_ELT_LIQ, 
+                           sid_det_ele_liquidations.VALEUR_NUMERIQUE
+                    FROM sid_element_liquidation, sid_det_ele_liquidations,
+                         sid_contribuable, sid_titre_recette, sid_impot, sid_periode_fiscale
+                    WHERE sid_det_ele_liquidations.CODE_ELT_LIQ = sid_element_liquidation.CODE_ELT_LIQ
+                      AND sid_det_ele_liquidations.ID_IMPOT = sid_impot.ID_IMPOT
+                      AND sid_impot.CODE_TITRE = sid_titre_recette.CODE_TITRE
+                      AND sid_titre_recette.ID_CONTR = sid_contribuable.ID_CONTR
+                      AND sid_det_ele_liquidations.CODE_NAT_IMP = '27'
+                      AND sid_impot.ID_CAL_FISC = sid_periode_fiscale.CODE_CAL_FISC
+                      AND sid_periode_fiscale.EXERCICE_GESTION > '2022'
+                      AND sid_titre_recette.ETAT_ACTUEL != 'ANNULE'
+                )
+                PIVOT (
+                    SUM(VALEUR_NUMERIQUE) 
+                    FOR CODE_ELT_LIQ IN ('69' as CA_HTVA, '120' as RETENUE_SOURCE_IMPUTE, '115' as BENEFICE_IMPOSABLE, 
+                                          '119' as IBENEF_EXIGIBLE, '122' as IBENEF_DUES, '123' as PREL_SOURCE_ACOMPTE, '228' as DEDUC_CGA)
+                )
             ),
-            ibica_data AS (
-                SELECT 
-                    sid_contribuable.NUM_IFU, 
-                    EXTRACT(YEAR FROM DATE_FIN_PERIODE) as ANNEE_FISCAL,
-                    sid_element_liquidation.CODE_ELT_LIQ, 
-                    sid_det_ele_liquidations.VALEUR_NUMERIQUE
-                FROM sid_element_liquidation, sid_det_ele_liquidations,
-                     sid_contribuable, sid_titre_recette, sid_impot, sid_periode_fiscale
-                WHERE sid_det_ele_liquidations.CODE_ELT_LIQ = sid_element_liquidation.CODE_ELT_LIQ
-                  AND sid_det_ele_liquidations.ID_IMPOT = sid_impot.ID_IMPOT
-                  AND sid_impot.CODE_TITRE = sid_titre_recette.CODE_TITRE
-                  AND sid_titre_recette.ID_CONTR = sid_contribuable.ID_CONTR
-                  AND sid_det_ele_liquidations.CODE_NAT_IMP = '03'
-                  AND sid_impot.ID_CAL_FISC = sid_periode_fiscale.CODE_CAL_FISC
-                  AND sid_periode_fiscale.EXERCICE_GESTION > '2018'
-                  AND sid_titre_recette.ETAT_ACTUEL != 'ANNULE'
+            ibnc_final AS (
+                SELECT NUM_IFU, ANNEE_FISCAL, 
+                       NVL(CA_HTVA, 0) as CA_HTVA, 
+                       NVL(BENEFICE_IMPOSABLE, 0) as BENEFICE_IMPOSABLE,
+                       NVL(IBENEF_EXIGIBLE, 0) as IBENEF_EXIGIBLE, 
+                       NVL(IBENEF_DUES, 0) as IBENEF_DUES,
+                       NVL(PREL_SOURCE_ACOMPTE, 0) as PREL_SOURCE_ACOMPTE, 
+                       NVL(RETENUE_SOURCE_IMPUTE, 0) as RETENUE_SOURCE_IMPUTE
+                FROM ibnc_pivot
             ),
-            is_data AS (
-                SELECT 
-                    sid_contribuable.NUM_IFU, 
-                    EXTRACT(YEAR FROM DATE_FIN_PERIODE) as ANNEE_FISCAL,
-                    sid_element_liquidation.CODE_ELT_LIQ, 
-                    sid_det_ele_liquidations.VALEUR_NUMERIQUE
-                FROM sid_element_liquidation, sid_det_ele_liquidations,
-                     sid_contribuable, sid_titre_recette, sid_impot, sid_periode_fiscale
-                WHERE sid_det_ele_liquidations.CODE_ELT_LIQ = sid_element_liquidation.CODE_ELT_LIQ
-                  AND sid_det_ele_liquidations.ID_IMPOT = sid_impot.ID_IMPOT
-                  AND sid_impot.CODE_TITRE = sid_titre_recette.CODE_TITRE
-                  AND sid_titre_recette.ID_CONTR = sid_contribuable.ID_CONTR
-                  AND sid_det_ele_liquidations.CODE_NAT_IMP IN ('88', '111')
-                  AND sid_impot.ID_CAL_FISC = sid_periode_fiscale.CODE_CAL_FISC
-                  AND sid_periode_fiscale.EXERCICE_GESTION > '2018'
-                  AND sid_titre_recette.ETAT_ACTUEL != 'ANNULE'
+            ibica_pivot AS (
+                SELECT * FROM (
+                    SELECT sid_contribuable.NUM_IFU, 
+                           EXTRACT(YEAR FROM DATE_FIN_PERIODE) as ANNEE_FISCAL,
+                           sid_element_liquidation.CODE_ELT_LIQ, 
+                           sid_det_ele_liquidations.VALEUR_NUMERIQUE
+                    FROM sid_element_liquidation, sid_det_ele_liquidations,
+                         sid_contribuable, sid_titre_recette, sid_impot, sid_periode_fiscale
+                    WHERE sid_det_ele_liquidations.CODE_ELT_LIQ = sid_element_liquidation.CODE_ELT_LIQ
+                      AND sid_det_ele_liquidations.ID_IMPOT = sid_impot.ID_IMPOT
+                      AND sid_impot.CODE_TITRE = sid_titre_recette.CODE_TITRE
+                      AND sid_titre_recette.ID_CONTR = sid_contribuable.ID_CONTR
+                      AND sid_det_ele_liquidations.CODE_NAT_IMP = '03'
+                      AND sid_impot.ID_CAL_FISC = sid_periode_fiscale.CODE_CAL_FISC
+                      AND sid_periode_fiscale.EXERCICE_GESTION > '2022'
+                      AND sid_titre_recette.ETAT_ACTUEL != 'ANNULE'
+                )
+                PIVOT (
+                    SUM(VALEUR_NUMERIQUE) 
+                    FOR CODE_ELT_LIQ IN ('69' as CA_HTVA, '121' as COTIS_BIC_PAYER, '116' as IBENEF_EXIGIBLE, 
+                                          '118' as IBENEF_DUES, '120' as RETENUE_SOURCE_IMPUTE, '115' as BENEFICE_IMPOSABLE,
+                                          '117' as COTIS_MFP, '119' as PREL_SOURCE_ACOMPTE, '228' as DEDUC_CGA)
+                )
+            ),
+            ibica_final AS (
+                SELECT NUM_IFU, ANNEE_FISCAL, 
+                       NVL(CA_HTVA, 0) as CA_HTVA, 
+                       NVL(BENEFICE_IMPOSABLE, 0) as BENEFICE_IMPOSABLE,
+                       NVL(IBENEF_EXIGIBLE, 0) as IBENEF_EXIGIBLE, 
+                       NVL(IBENEF_DUES, 0) as IBENEF_DUES,
+                       NVL(PREL_SOURCE_ACOMPTE, 0) as PREL_SOURCE_ACOMPTE, 
+                       NVL(RETENUE_SOURCE_IMPUTE, 0) as RETENUE_SOURCE_IMPUTE
+                FROM ibica_pivot
+            ),
+            is_pivot AS (
+                SELECT * FROM (
+                    SELECT sid_contribuable.NUM_IFU, 
+                           EXTRACT(YEAR FROM DATE_FIN_PERIODE) as ANNEE_FISCAL,
+                           sid_element_liquidation.CODE_ELT_LIQ, 
+                           sid_det_ele_liquidations.VALEUR_NUMERIQUE
+                    FROM sid_element_liquidation, sid_det_ele_liquidations,
+                         sid_contribuable, sid_titre_recette, sid_impot, sid_periode_fiscale
+                    WHERE sid_det_ele_liquidations.CODE_ELT_LIQ = sid_element_liquidation.CODE_ELT_LIQ
+                      AND sid_det_ele_liquidations.ID_IMPOT = sid_impot.ID_IMPOT
+                      AND sid_impot.CODE_TITRE = sid_titre_recette.CODE_TITRE
+                      AND sid_titre_recette.ID_CONTR = sid_contribuable.ID_CONTR
+                      AND sid_det_ele_liquidations.CODE_NAT_IMP IN ('88', '111')
+                      AND sid_impot.ID_CAL_FISC = sid_periode_fiscale.CODE_CAL_FISC
+                      AND sid_periode_fiscale.EXERCICE_GESTION > '2022'
+                      AND sid_titre_recette.ETAT_ACTUEL != 'ANNULE'
+                )
+                PIVOT (
+                    SUM(VALEUR_NUMERIQUE) 
+                    FOR CODE_ELT_LIQ IN ('75' as COTIS_IS_DUE, '73' as IRVM_SUBI, '76' as PREL_SOURCE_ACOMPTE, 
+                                          '71' as IBENEF_EXIGIBLE, '77' as RETENUE_SOURCE_IMPUTE, '70' as BENEFICE_IMPOSABLE,
+                                          '69' as CA_HTVA, '72' as ACOMPTES_PROV, '74' as IRC_SUBI)
+                )
+            ),
+            is_final AS (
+                SELECT NUM_IFU, ANNEE_FISCAL, 
+                       NVL(CA_HTVA, 0) as CA_HTVA, 
+                       NVL(BENEFICE_IMPOSABLE, 0) as BENEFICE_IMPOSABLE,
+                       NVL(IBENEF_EXIGIBLE, 0) as IBENEF_EXIGIBLE, 
+                       NVL(COTIS_IS_DUE, 0) as IBENEF_DUES,
+                       NVL(PREL_SOURCE_ACOMPTE, 0) as PREL_SOURCE_ACOMPTE, 
+                       NVL(RETENUE_SOURCE_IMPUTE, 0) as RETENUE_SOURCE_IMPUTE
+                FROM is_pivot
+            ),
+            bav_combined AS (
+                SELECT * FROM ibnc_final
+                UNION ALL
+                SELECT * FROM ibica_final
+                UNION ALL
+                SELECT * FROM is_final
             )
-            SELECT NUM_IFU, ANNEE_FISCAL, CODE_ELT_LIQ, VALEUR_NUMERIQUE, 'IBNC' as TYPE_BENEFICE
-            FROM ibnc_data
-            UNION ALL
-            SELECT NUM_IFU, ANNEE_FISCAL, CODE_ELT_LIQ, VALEUR_NUMERIQUE, 'IBICA' as TYPE_BENEFICE
-            FROM ibica_data
-            UNION ALL
-            SELECT NUM_IFU, ANNEE_FISCAL, CODE_ELT_LIQ, VALEUR_NUMERIQUE, 'IS' as TYPE_BENEFICE
-            FROM is_data
-            ORDER BY NUM_IFU, ANNEE_FISCAL, TYPE_BENEFICE
+            SELECT 
+                NUM_IFU, 
+                ANNEE_FISCAL,
+                SUM(CA_HTVA) as CA_HTVA,
+                SUM(BENEFICE_IMPOSABLE) as BENEFICE_IMPOSABLE,
+                SUM(IBENEF_EXIGIBLE) as IBENEF_EXIGIBLE,
+                SUM(IBENEF_DUES) as IBENEF_DUES,
+                SUM(PREL_SOURCE_ACOMPTE) as PREL_SOURCE_ACOMPTE,
+                SUM(RETENUE_SOURCE_IMPUTE) as RETENUE_SOURCE_IMPUTE
+            FROM bav_combined
+            GROUP BY NUM_IFU, ANNEE_FISCAL
+            ORDER BY NUM_IFU, ANNEE_FISCAL
             """
 # Note: Le script R n'utilise pas de table PROG_DCF.DCF_COMPTABILITE
 # Il utilise le fichier Excel BASE_DONNEES.xlsx à la place
 # Cette requête a été supprimée pour correspondre exactement au script R
 
-sql_insd = """ 
+sql_insd = """
 SELECT 
-     i."Numero_IFU",
+     i."Numero_IFU" as NUM_IFU,
     COALESCE(i."ID_INSD", r."ID_INSD", df."ID_INSD", p."ID_INSD", a."ID_INSD", ps."ID_INSD", dfin."ID_INSD", s."ID_INSD") AS ID_INSD,
     i."Annee",
      i."FDP_AcqApCreat", i."BLLDS_AcqApCreat", i."BLLDS_VirepostPost",
