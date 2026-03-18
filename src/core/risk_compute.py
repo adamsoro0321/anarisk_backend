@@ -206,6 +206,7 @@ class RiskComputer:
         date_derniere_vg: str = "2022-12-31", 
         date_derniere_vp: str = "2022-12-31", 
         date_derniere_avis: str = "2022-12-31"
+        
     ) -> pd.DataFrame:
         """
         Calcul de tous les indicateurs de risque en utilisant les classes modulaires
@@ -241,9 +242,9 @@ class RiskComputer:
         
         self.logger.info(f"1.avant filtre: {len(merged_data)} lignes")
         
-        merged_data = merged_data[(merged_data["DATE_DERNIERE_VG"]<date_derniere_vg) & 
-            (merged_data["DATE_DERNIERE_AVIS"]<date_derniere_avis) &
-            (merged_data["DATE_DERNIERE_VP"]<date_derniere_vp)]
+        #merged_data = merged_data[(merged_data["DATE_DERNIERE_VG"]<date_derniere_vg) & 
+        #    (merged_data["DATE_DERNIERE_AVIS"]<date_derniere_avis) &
+        #    (merged_data["DATE_DERNIERE_VP"]<date_derniere_vp)]
         
         self.logger.info(f"2.apres filtre: {len(merged_data)} lignes")
         # Sélectionner les colonnes de base disponibles dans merged_data
@@ -342,7 +343,6 @@ class RiskComputer:
         self, 
         data: pd.DataFrame = None,
         indicateurs: list=None,  
-
     ) -> Dict[str, any]:
         """
         Exécution complète de l'analyse de risque"""

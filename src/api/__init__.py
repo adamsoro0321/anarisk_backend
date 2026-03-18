@@ -16,11 +16,13 @@ from .contribuable_api import contribuable_bp
 from .brigade_api import brigade_bp
 from .quantume_api import quantume_bp
 from .programmes import programmes_files_bp
+from .indicator import indicateur_bp
 # Liste des blueprints à enregistrer
 __all__ = [
-    'risk_bp', 'auth_bp', 'stats_bp', 'api_bp', 'programme_bp',
-    'users_bp', 'roles_bp', 'permissions_bp', 'indicateurs_bp','users_bp'
-    'contribuable_bp','fiche_bp', 'programmes_files_bp'
+    'risk_bp', 'auth_bp', 'stats_bp', 'api_bp',
+    'users_bp', 'contribuable_bp', 'fiche_bp', 
+    'programmes_files_bp', 'brigade_bp', 'quantume_bp',
+    'indicateur_bp'
 ]
 
 
@@ -42,4 +44,5 @@ def register_blueprints(app):
     app.register_blueprint(brigade_bp, url_prefix='/api/v1')
     app.register_blueprint(quantume_bp, url_prefix='/api/v1')
     app.register_blueprint(programmes_files_bp, url_prefix='/api/v1')
+    app.register_blueprint(indicateur_bp, url_prefix='/api/v1')
     print("✓ Blueprints API enregistrés avec succès")

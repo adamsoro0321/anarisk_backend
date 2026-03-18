@@ -12,7 +12,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pandas as pd
 from dotenv import load_dotenv
-
+from celery.utils.log import get_task_logger
+import redis
 
 # Ajouter le dossier src au path
 sys.path.append(os.path.dirname(__file__))
@@ -30,8 +31,9 @@ load_dotenv()
 
 # ============================================================================
 # Configuration de l'application Flask 
+logger = get_task_logger(__name__)
 database_url = os.getenv("DATABASE_URL")
-print(f"🔧 Configuration de la base de données: {database_url}")
+
 def create_app():
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'anarisk-dgi-burkina-faso-secret-key-2025')
@@ -68,49 +70,46 @@ def create_celery_app(app):
 app = create_app()
 
 celery_app = create_celery_app(app)
+celery_app.conf.enable_utc = True
+celery_app.conf.update(
+    enable_utc=True,
+    timezone='UTC',)
 # Enregistrement des blueprints API
 register_blueprints(app)
 
 # Init variables pour Celery
 oracle_engine = connectionOds()
 
+# Client Redis pour le verrou de tâche
+redis_client = redis.Redis.from_url(
+    os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+)
+RISK_ANALYSIS_LOCK_KEY = 'anarisk:run_risk_analysis:lock'
+
 # ============================================================================
 # Routes de base
 # ============================================================================
 
 @celery_app.task(bind=True, name='app.run_risk_analysis')
-def run_risk_analysis(self, local_mode: bool = True):
+def run_risk_analysis(self):
     """
     Tâche Celery : extraction, fusion et calcul des indicateurs de risque.
-
     Étapes :
       1. Connexion Oracle
       2. Extraction & fusion des données (DataLoader)
       3. Calcul des indicateurs de risque (RiskComputer)
       4. Sauvegarde CSV dans data/risk_contribuables/
-
     Le statut de progression est mis à jour via self.update_state() et peut être
     consulté via GET /api/v1/run/status/<task_id>.
     """
-    logger = logging.getLogger(__name__)
     connect = None
-
-    def _progress(step: int, total: int, msg: str):
-        self.update_state(
-            state='PROGRESS',
-            meta={'current': step, 'total': total, 'status': msg}
-        )
-        logger.info(f"[{step}/{total}] {msg}")
-
     try:
-        total_steps = 3
-
+        # Poser le verrou Redis (TTL 2h max pour éviter un verrou permanent)
+        redis_client.set(RISK_ANALYSIS_LOCK_KEY, self.request.id, ex=7200)
         # ── Étape 1 : Connexion Oracle ────────────────────────────────────
-        _progress(1, total_steps, 'Connexion à la base Oracle…')
         connect = oracle_engine.connect()
 
         # ── Étape 2 : Extraction & fusion ────────────────────────────────
-        _progress(2, total_steps, 'Extraction et fusion des données…')
         loader = DataLoader(oracle_engine)
         merged_data = loader.run_extract_merge()
 
@@ -120,7 +119,6 @@ def run_risk_analysis(self, local_mode: bool = True):
         logger.info(f"Données fusionnées : {len(merged_data)} lignes, {len(merged_data.columns)} colonnes")
 
         # ── Étape 3 : Calcul des indicateurs ─────────────────────────────
-        _progress(3, total_steps, f'Calcul des indicateurs de risque pour {len(merged_data)} contribuables…')
         computer = RiskComputer()
         result = computer.run(data=merged_data)
 
@@ -144,13 +142,11 @@ def run_risk_analysis(self, local_mode: bool = True):
     except Exception as exc:
         logger.exception(f"Échec de run_risk_analysis : {exc}")
         # Forcer Celery à marquer la tâche comme FAILURE avec le message d'erreur
-        self.update_state(
-            state='FAILURE',
-            meta={'exc_type': type(exc).__name__, 'exc_message': str(exc)}
-        )
         raise  # Celery enregistre l'exception dans le result backend
 
     finally:
+        # Libérer le verrou Redis
+        redis_client.delete(RISK_ANALYSIS_LOCK_KEY)
         if connect is not None:
             try:
                 connect.close()
@@ -179,9 +175,23 @@ def run_analysis():
     """
     Lance l'analyse des risques en arrière-plan via Celery.
     Retourne immédiatement un task_id pour suivre la progression.
+    Vérifie d'abord qu'aucune tâche identique n'est déjà en cours.
     """
     try:
-        task = run_risk_analysis.delay(local_mode=True)
+        # Vérifier si une tâche run_risk_analysis est déjà en cours (verrou Redis)
+        existing_task_id = redis_client.get(RISK_ANALYSIS_LOCK_KEY)
+        if existing_task_id:
+            existing_task_id = existing_task_id.decode()
+            return jsonify({
+                'success': False,
+                'message': 'Une analyse des risques est déjà en cours',
+                'task_id': existing_task_id,
+                'status_url': f'/api/v1/run/status/{existing_task_id}'
+            }), 409
+
+        task = run_risk_analysis.delay()
+        # Poser le verrou immédiatement côté API pour éviter les appels concurrents
+        redis_client.set(RISK_ANALYSIS_LOCK_KEY, task.id, ex=7200)
         return jsonify({
             'success': True,
             'message': 'Analyse des risques lancée',

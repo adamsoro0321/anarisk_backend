@@ -1,6 +1,6 @@
 from typing import List, Optional
 from datetime import datetime, timezone
-from sqlalchemy import ForeignKey, String, DateTime, Table, Column, Integer
+from sqlalchemy import ForeignKey, String, Text, DateTime, Table, Column, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from werkzeug.security import generate_password_hash, check_password_hash
 from extensions import db
@@ -162,19 +162,36 @@ class Indicateur(db.Model):
     __tablename__ = "indicateurs"
     
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
-    intitule: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(String(500))
-    categorie: Mapped[str] = mapped_column(String(50), nullable=False)  # 'TVA', 'CME', 'RSI', etc.
-    formule: Mapped[Optional[str]] = mapped_column(String(500))  # Formule de calcul
-    seuil_alerte: Mapped[Optional[float]] = mapped_column()
-    poids: Mapped[float] = mapped_column(default=1.0, nullable=False)  # Poids dans le calcul du risque global
+    code_indicateur: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    axes_controle: Mapped[Optional[str]] = mapped_column(Text)
+    intitule: Mapped[str] = mapped_column(Text, nullable=False)
+    objectif: Mapped[Optional[str]] = mapped_column(String(1000))
+    unite_mesure: Mapped[Optional[str]] = mapped_column(String(100))
+    variables_calcul: Mapped[Optional[str]] = mapped_column(String(1000))
+    formule_calcul: Mapped[Optional[str]] = mapped_column(String(1000))
+    seuil_declenchement: Mapped[Optional[str]] = mapped_column(Text)
+    regle_selection: Mapped[Optional[str]] = mapped_column(String(1000))
+    criticite: Mapped[Optional[str]] = mapped_column(String(50))
+    calcul_ecart: Mapped[Optional[str]] = mapped_column(String(500))
+    coefficient_moderation: Mapped[Optional[str]] = mapped_column(Text)
+    impact_recettes: Mapped[Optional[str]] = mapped_column(String(500))
+    designation_anomalie: Mapped[Optional[str]] = mapped_column(String(500))
+    type_controle: Mapped[Optional[str]] = mapped_column(String(200))
+    sources_donnees: Mapped[Optional[str]] = mapped_column(String(500))
+    impots_controle: Mapped[Optional[str]] = mapped_column(String(200))
+    segments_concernes: Mapped[Optional[str]] = mapped_column(String(200))
+    regimes_concernes: Mapped[Optional[str]] = mapped_column(String(200))
+    forme_juridique: Mapped[Optional[str]] = mapped_column(String(200))
+    implemente: Mapped[Optional[str]] = mapped_column(String(10))  # 'oui' ou 'non'
+    limite: Mapped[Optional[str]] = mapped_column(String(500))
+    commentaires: Mapped[Optional[str]] = mapped_column(String(1000))
+    type:Mapped[Optional[str]] =  mapped_column(String(2000))
     actif: Mapped[bool] = mapped_column(default=True, nullable=False)
     date_creation: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     date_modification: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=lambda: datetime.now(timezone.utc))
 
     def __repr__(self):
-        return f'<Indicateur {self.code}: {self.intitule}>' 
+        return f'<Indicateur {self.code_indicateur}: {self.intitule}>' 
 
 class Programme(db.Model):
     """Modèle des programmes d'analyse de risque"""

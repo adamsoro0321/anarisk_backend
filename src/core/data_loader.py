@@ -409,11 +409,11 @@ class DataLoader:
             )
             self.logger.info(f"Fusion avec DGD: {len(merged_data)} lignes")
         if "programmation" in extracted_data:
-            extracted_data["programmation"]["DATE_IMMAT"] = extracted_data["programmation"]["DATE_IMMAT"].astype(str).str.strip()
+            extracted_data["programmation"].drop("DATE_IMMAT", axis=1, inplace=True)
             merged_data = pd.merge(
                 merged_data,
                 extracted_data["programmation"],
-                on=["NUM_IFU","NOM_MINEFID","DATE_IMMAT"],
+                on=["NUM_IFU","NOM_MINEFID"],
                 how="left",
             )
             self.logger.info(f"Fusion avec Programmation|controlle: {len(merged_data)} lignes")

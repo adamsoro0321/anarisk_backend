@@ -1,20 +1,21 @@
--erreur dans l'indicateur 6
-C'est bizarre... En fait le R compare un ratio (0.3) à un montant (400). C'est une incohérence dans le code R original, mais c'est la logique qu'il utilise.
+1.les données des contrubuable sont sans date et les date commence avec les données de la doune 
+2.programmation n'as pas de date 
 
-2.l'indi 7  n'as pas de fonction 
+DCF_PROG1=full_join(DGD_IMPORT_EXPORT_AN,BD_TVA,by=c("NUM_IFU","ANNEE")) 
 
-3.IND 9,10 . n'est pas implementer en python
+DCF_PROG2=full_join(CONTRIBUABLE,DCF_PROG1, by="NUM_IFU")
+DCF_PROG3=full_join(DCF_PROG2,BASE_DONNEES, by=c("NUM_IFU","ANNEE"))
+DCF_PROG3=left_join(DCF_PROG3,PROGRAMMATIONS, by=c("NUM_IFU","NOM_MINEFID","DATE_IMMAT"))
+DCF_PROG3V0=left_join(DCF_PROG3,BAV_agg,by=c("NUM_IFU","ANNEE_FISCAL")) 
+================optimiser l'implementation des indicateur ================
+1.assurer que la coherence des données 
+2.optimiser l'implementation de quelque indicateur 
+3.generation des fiches 
+==
+4.implementation des profile et role 
+5.implementation des endpoints 
 
-4.indicateur implementer en python :
-tva: 1,2,8,12,13,14
-comptabilité :9,6,20,21,23
-contrôle : 15 ,16
-Advanced : 37,38,39,46,49,57,58
 
-4. Eligible : creation d'une classe eligible
+===============
 
-5: des doublons dans DCF_PROG 
-
-
-============nextstep===================
-1.TRouvez  la source de la duplication
+role : dcf ,admin ,agent_dcf ,ur
