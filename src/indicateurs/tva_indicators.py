@@ -142,6 +142,7 @@ class TVAIndicators:
         Logique: MONTANT_TVA_NET_A_PAYER / Fourn_TVA_DEDUCTIBLE >= 0.2
         Version optimisée avec assignation directe dans risk_df
         """
+        logger.info("Start.compute ===>IND1")
         # Paramètres
         criticite = 5
         seuil = 0.2
@@ -191,6 +192,8 @@ class TVAIndicators:
             risk_df.loc[calc_mask, "SCORE_IND_1"] = scores
             risk_df.loc[calc_mask, "RISQUE_IND_1"] = TVAIndicators._determine_groupe_vectorized(scores, criticite)
 
+        logger.info("End.compute ===>IND1")
+
         return risk_df
 
     @staticmethod
@@ -202,6 +205,7 @@ class TVAIndicators:
         Logique: Déductions TVA Nov-Déc / Déductions TVA Annuelles > 0.5
         Version optimisée avec assignation directe dans risk_df
         """
+        logger.info("Start.compute ===>IND2")
         # Paramètres
         criticite = 4
         seuil = 0.5
@@ -250,6 +254,7 @@ class TVAIndicators:
             scores = criticite * impact
             risk_df.loc[calc_mask, "SCORE_IND_2"] = scores
             risk_df.loc[calc_mask, "RISQUE_IND_2"] = TVAIndicators._determine_groupe_vectorized(scores, criticite)
+        logger.info("END.compute ===>IND2")
 
         return risk_df
 
@@ -262,6 +267,7 @@ class TVAIndicators:
         Logique: MONTANT_DECLARE / Fourn_TVA_DEDUCTIBLE >= 0.95
         Version optimisée avec assignation directe dans risk_df
         """
+        logger.info("Start.compute ===>IND8")
         # Paramètres
         criticite = 4
         seuil = 0.95
@@ -305,11 +311,12 @@ class TVAIndicators:
         if calc_mask.any():
             ecart_calc = np.abs((seuil * denominateur[calc_mask]) - numerateur[calc_mask]) * coeff
             risk_df.loc[calc_mask, "GAP_IND_8"] = ecart_calc
-            
+
             impact = TVAIndicators._calculate_impact_vectorized(ecart_calc, x1, x2, x3, x4)
             scores = criticite * impact
             risk_df.loc[calc_mask, "SCORE_IND_8"] = scores
             risk_df.loc[calc_mask, "RISQUE_IND_8"] = TVAIndicators._determine_groupe_vectorized(scores, criticite)
+        logger.info("END.compute ===>IND8")
 
         return risk_df
 
@@ -328,6 +335,7 @@ class TVAIndicators:
         
         Version optimisée avec assignation directe dans risk_df
         """
+        logger.info("Start.compute ===>IND10")
         # Paramètres
         criticite = 4
         seuil = 0.95
@@ -376,7 +384,7 @@ class TVAIndicators:
             scores = criticite * impact
             risk_df.loc[calc_mask, "SCORE_IND_10"] = scores
             risk_df.loc[calc_mask, "RISQUE_IND_10"] = TVAIndicators._determine_groupe_vectorized(scores, criticite)
-
+        logger.info("END.compute ===>IND10")
         return risk_df
 
     @staticmethod
@@ -388,6 +396,7 @@ class TVAIndicators:
         Logique: EtatTVA_AnneeN / TVA_DECEMBRE >= 0.2
         Version optimisée avec assignation directe dans risk_df
         """
+        logger.info("Start.compute ===>IND12")
         # Paramètres
         criticite = 3
         seuil = 0.2
@@ -437,6 +446,7 @@ class TVAIndicators:
             risk_df.loc[calc_mask, "SCORE_IND_12"] = scores
             risk_df.loc[calc_mask, "RISQUE_IND_12"] = TVAIndicators._determine_groupe_vectorized(scores, criticite)
 
+        logger.info("END.compute ===>IND12")
         return risk_df
 
     @staticmethod
@@ -448,6 +458,7 @@ class TVAIndicators:
         Logique: MNT_BASE_IMPOSABLE / CA >= 1
         Version optimisée avec assignation directe dans risk_df
         """
+        logger.info("Start.compute ===>IND13")
         # Paramètres
         criticite = 3
         seuil = 1
@@ -519,6 +530,7 @@ class TVAIndicators:
             risk_df.loc[calc_mask, "SCORE_IND_13"] = scores
             risk_df.loc[calc_mask, "RISQUE_IND_13"] = TVAIndicators._determine_groupe_vectorized(scores, criticite)
 
+        logger.info("END.compute ===>IND13")
         return risk_df
 
     @staticmethod
@@ -530,6 +542,7 @@ class TVAIndicators:
         Logique: MONTANT_TOTAL_LA_BRUTE_15 = 0 pour RN/ND
         Version optimisée avec assignation directe dans risk_df
         """
+        logger.info("Start.compute ===>IND14")
         # Initialiser la colonne de résultats
         risk_df["RISQUE_IND_14"] = "vert"
 
@@ -544,6 +557,7 @@ class TVAIndicators:
         
         risk_df.loc[rouge_mask, "RISQUE_IND_14"] = "rouge"
 
+        logger.info("END.compute ===>IND14")
         return risk_df
 
     @staticmethod

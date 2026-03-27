@@ -98,7 +98,7 @@ class ProgrammeGenerator:
             ws_analyse_risk = wb.create_sheet("Fiche_Analyse_Risque")
             # Écrire le nom du contribuable en A1
             ws_contribuables.cell(1, 1, contribuable)
-        
+
             # Définir les largeurs de colonnes (cols 2:4 = B, C, D)
             ws_contribuables.column_dimensions['B'].width = 40
             ws_contribuables.column_dimensions['C'].width = 40

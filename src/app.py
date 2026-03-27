@@ -91,7 +91,7 @@ RISK_ANALYSIS_LOCK_KEY = 'anarisk:run_risk_analysis:lock'
 # ============================================================================
 
 @celery_app.task(bind=True, name='app.run_risk_analysis')
-def run_risk_analysis(self):
+def run_risk_analysis(self,quantume):
     """
     Tâche Celery : extraction, fusion et calcul des indicateurs de risque.
     Étapes :
@@ -120,7 +120,7 @@ def run_risk_analysis(self):
 
         # ── Étape 3 : Calcul des indicateurs ─────────────────────────────
         computer = RiskComputer()
-        result = computer.run(data=merged_data)
+        result = computer.run(data=merged_data,quantume_name=quantume)
 
         if result.get('status') != 'success':
             raise RuntimeError(result.get('message', 'Erreur inconnue dans RiskComputer.run()'))
@@ -153,6 +153,9 @@ def run_risk_analysis(self):
             except Exception:
                 pass
 
+@celery_app.task(bind=True, name="app.run_generate-fiches")
+def generate_fiches(self,quantume):
+    pass
 
 @app.route('/')
 def index():
@@ -178,6 +181,14 @@ def run_analysis():
     Vérifie d'abord qu'aucune tâche identique n'est déjà en cours.
     """
     try:
+        #verifier si le quantume existe sinon rejeter la requete
+        quantume = request.args.get("quantume")
+        if not quantume:
+            return jsonify({
+                'success': False,
+                'message': 'veillez choisir le quantume !'
+            }), 400
+        
         # Vérifier si une tâche run_risk_analysis est déjà en cours (verrou Redis)
         existing_task_id = redis_client.get(RISK_ANALYSIS_LOCK_KEY)
         if existing_task_id:
@@ -189,7 +200,7 @@ def run_analysis():
                 'status_url': f'/api/v1/run/status/{existing_task_id}'
             }), 409
 
-        task = run_risk_analysis.delay()
+        task = run_risk_analysis.delay(quantume)
         # Poser le verrou immédiatement côté API pour éviter les appels concurrents
         redis_client.set(RISK_ANALYSIS_LOCK_KEY, task.id, ex=7200)
         return jsonify({
@@ -360,8 +371,70 @@ def revoke_task(task_id):
             'error': str(e)
         }), 500
 
+@app.route('/api/v1/revoke/<task_id>', methods=['POST'])
+def revoke_tache(task_id):
+    """
+    Arrête une tâche Celery en attente ou en cours d'exécution.
 
+    Body JSON optionnel :
+      { "terminate": true }  — force l'arrêt immédiat du processus worker (SIGKILL)
+                               par défaut : false (SIGTERM, arrêt propre)
 
+    Effets :
+      - Révoque la tâche auprès de tous les workers (broadcast)
+      - Si la tâche est celle verrouillée par le verrou Redis, le verrou est libéré
+      - Retourne l'état final de la tâche après révocation
+    """
+    try:
+        body      = request.get_json(silent=True) or {}
+        terminate = bool(body.get('terminate', False))
+
+        # Vérifier que la tâche existe et n'est pas déjà terminée
+        result = celery_app.AsyncResult(task_id)
+        if result.state in ('SUCCESS', 'FAILURE', 'REVOKED'):
+            return jsonify({
+                'success': False,
+                'task_id': task_id,
+                'state':   result.state,
+                'message': f"Impossible de révoquer : la tâche est déjà dans l'état « {result.state} ».",
+            }), 409
+
+        # Révoquer la tâche (SIGTERM uniquement — SIGKILL non supporté sur Windows)
+        celery_app.control.revoke(task_id, terminate=terminate, signal='SIGTERM')
+
+        # Libérer le verrou Redis si c'est la tâche verrouillée
+        locked_id = redis_client.get(RISK_ANALYSIS_LOCK_KEY)
+        lock_released = False
+        if locked_id and locked_id.decode() == task_id:
+            redis_client.delete(RISK_ANALYSIS_LOCK_KEY)
+            lock_released = True
+
+        # Re-lire l'état après révocation
+        result.forget()  # vider le cache local
+        result = celery_app.AsyncResult(task_id)
+
+        return jsonify({
+            'success':      True,
+            'task_id':      task_id,
+            'state':        result.state,
+            'terminate':    terminate,
+            'lock_released': lock_released,
+            'message':      f"Tâche {task_id} révoquée{' (terminée de force)' if terminate else ''}.",
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': 'Erreur lors de la révocation de la tâche',
+            'error': str(e)
+        }), 500
+
+@app.route("/api/v1/generate-fiches",methods =["POST"])
+def generate_fiches():
+    try:
+        pass
+    except :
+        pass
 # ============================================================================
 
 @app.errorhandler(404)

@@ -325,14 +325,14 @@ LEFT JOIN MERGE_TITRES T ON D.NUM_IFU = T.NUM_IFU AND D.ANNEE = T.ANNEE
 # 5.
 sql_programmations_control = """
             WITH vg_data AS (
-                SELECT  
+                SELECT
                     ID_CONTR, TYPE_CONTROLE, MAX(DATE_PROGR) as DATE_DERNIERE_VG
-                FROM SID_PROGRAMME_VERIFICATION 
+                FROM SID_PROGRAMME_VERIFICATION
                 WHERE TYPE_CONTROLE = 'GENERAL'
                 GROUP BY ID_CONTR, NUM_IFU, TYPE_CONTROLE
             ),
             vp_data AS (
-                SELECT  
+                SELECT
                     ID_CONTR, TYPE_CONTROLE, MAX(DATE_PROGR) as DATE_DERNIERE_VP
                 FROM SID_PROGRAMME_VERIFICATION 
                 WHERE TYPE_CONTROLE != 'GENERAL'
@@ -362,7 +362,7 @@ sql_programmations_control = """
                 GROUP BY ID_CONTR
             ),
             programmation_with_ifu AS (
-                SELECT 
+                SELECT
                     pc.ID_CONTR,
                     ci.NUM_IFU,
                     ci.DATE_IMMAT,
@@ -373,18 +373,18 @@ sql_programmations_control = """
                 LEFT JOIN contrib_info ci ON pc.ID_CONTR = ci.ID_CONTR
             )
             SELECT DISTINCT
-                pwi.NUM_IFU, 
-                pwi.DATE_IMMAT, 
-                pwi.DATE_DERNIERE_VG, 
+                pwi.NUM_IFU,
+                pwi.DATE_IMMAT,
+                pwi.DATE_DERNIERE_VG,
                 pwi.DATE_DERNIERE_VP,
                 pwi.NOM_MINEFID,
-                ad.DATE_DERNIERE_AVIS, 
+                ad.DATE_DERNIERE_AVIS,
                 ad.DERNIERE_GESTION_SOUMIS_VERIF
             FROM programmation_with_ifu pwi
             FULL OUTER JOIN avis_data ad ON pwi.ID_CONTR = ad.ID_CONTR
             WHERE pwi.NUM_IFU IS NOT NULL
             ORDER BY pwi.NUM_IFU
-            """ 
+            """
 
 
 # 6.

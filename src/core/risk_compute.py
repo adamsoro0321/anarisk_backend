@@ -202,10 +202,7 @@ class RiskComputer:
     def calculate_all_indicators(
         self,
         merged_data: pd.DataFrame, 
-        indicators: list | None = None , 
-        date_derniere_vg: str = "2022-12-31", 
-        date_derniere_vp: str = "2022-12-31", 
-        date_derniere_avis: str = "2022-12-31"
+        indicators: list | None = None 
         
     ) -> pd.DataFrame:
         """
@@ -262,9 +259,12 @@ class RiskComputer:
 
         self.logger.info(f"Colonnes de base initialisées: {len(available_base_cols)} colonnes")
         # ============================ordre important à respecter=========================================
+        self.logger.info("=== START: Groupe Controle (IND 15A, 15B, 30) ===")
         result = ControleIndicators.calculate_all_indicators(merged_data,result)
+        self.logger.info("=== END: Groupe Controle ===")
 
         # Indicateurs TVA (1, 2, 8,10, 12, 13, 14)
+        self.logger.info("=== START: Groupe TVA (IND 1, 2, 8, 10, 12, 13, 14) ===")
         if 1 in indicators:
             result = TVAIndicators.calculate_indicator_1(merged_data, result)
         if 2 in indicators:
@@ -279,8 +279,10 @@ class RiskComputer:
             result = TVAIndicators.calculate_indicator_13(merged_data, result)
         if 14 in indicators:
             result = TVAIndicators.calculate_indicator_14(merged_data, result)
+        self.logger.info("=== END: Groupe TVA ===")
 
         # Indicateurs Import/Export (3, 4, 5)
+        self.logger.info("=== START: Groupe Import/Export (IND 3, 4, 5, 7) ===")
         if 3 in indicators:
             result = ImportExportIndicators.calculate_indicator_3(merged_data, result)
         if 4 in indicators:
@@ -289,8 +291,10 @@ class RiskComputer:
             result = ImportExportIndicators.calculate_indicator_5(merged_data, result)
         if 7 in indicators:
             result = ImportExportIndicators.calculate_indicator_7(merged_data, result)
+        self.logger.info("=== END: Groupe Import/Export ===")
 
         # Indicateurs Comptabilité (9,6,20, 21, 23,24,25,26, 27, 29,32,33,34)
+        self.logger.info("=== START: Groupe Comptabilite (IND 6, 9, 20, 21, 23, 24, 25, 26, 27, 29, 32, 33, 34) ===")
         if 9 in indicators:
             result = ComptabiliteIndicators.calculate_indicator_9(merged_data, result)
         if 6 in indicators:
@@ -317,8 +321,10 @@ class RiskComputer:
             result = ComptabiliteIndicators.calculate_indicator_33(merged_data, result)
         if 34 in indicators:
             result = ComptabiliteIndicators.calculate_indicator_34(merged_data, result)
+        self.logger.info("=== END: Groupe Comptabilite ===")
 
         # Indicateurs Avancés (37, 38, 39, 46, 47, 49, 57, 58)
+        self.logger.info("=== START: Groupe Avance (IND 37, 38, 39, 46, 47, 49, 57, 58) ===")
         if 37 in indicators:
             result = AdvancedIndicators.calculate_indicator_37(merged_data, result)
         if 38 in indicators:
@@ -335,6 +341,7 @@ class RiskComputer:
             result = AdvancedIndicators.calculate_indicator_57(merged_data, result)
         if 58 in indicators:
             result = AdvancedIndicators.calculate_indicator_58(merged_data, result)
+        self.logger.info("=== END: Groupe Avance ===")
 
         self.logger.info("Calcul de tous les indicateurs terminé")
         return result
@@ -342,7 +349,8 @@ class RiskComputer:
     def run(
         self, 
         data: pd.DataFrame = None,
-        indicateurs: list=None,  
+        indicateurs: list=None,
+        quantume_name:str=None
     ) -> Dict[str, any]:
         """
         Exécution complète de l'analyse de risque"""
@@ -380,7 +388,8 @@ class RiskComputer:
             os.makedirs(output_dir, exist_ok=True)
 
             # Sauvegarde du fichier CSV
-            file_path = f"{output_dir}/RISK_INDICATEUR_CONTRIBUABLES_{pd.Timestamp.now().strftime('%Y%m%d')}.csv"
+            
+            file_path =  f"{output_dir}/{quantume_name}" if quantume_name else f"{output_dir}/RISK_INDICATEUR_CONTRIBUABLES_{pd.Timestamp.now().strftime('%Y%m%d')}.csv"
             results_data.to_csv(file_path, index=False, sep=";")
             
             self.logger.info(f"=== ANALYSE TERMINÉE EN {elapsed_time:.2f}s ===")

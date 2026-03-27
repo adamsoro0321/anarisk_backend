@@ -5,8 +5,11 @@ Reproduction des fonctions d'import/export du script R
 
 import pandas as pd
 import numpy as np
+import logging
 from datetime import datetime
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 
 class ImportExportIndicators:
@@ -29,6 +32,7 @@ class ImportExportIndicators:
         
         Entreprise créée il y a moins de 12 mois avec importations >= 100M
         """
+        logger.info("Start.compute ===>IND3")
         # Initialiser la colonne si elle n'existe pas
         if "RISQUE_IND_3" not in risk_df.columns:
             risk_df["RISQUE_IND_3"] = "Non disponible"
@@ -60,6 +64,7 @@ class ImportExportIndicators:
         risk_df.loc[valid_mask, "RISQUE_IND_3"] = "vert"
         risk_df.loc[valid_mask & risque_rouge, "RISQUE_IND_3"] = "rouge"
 
+        logger.info("END.compute ===>IND3")
         return risk_df
 
     @staticmethod
@@ -97,6 +102,7 @@ class ImportExportIndicators:
 
         Paramètres: criticite=5, seuil=1, coeff=0.8
         """
+        logger.info("Start.compute ===>IND4")
         # Paramètres fixes comme en R
         criticite = 5
         seuil = 1
@@ -171,6 +177,7 @@ class ImportExportIndicators:
         risk_df.loc[risque_mask, "GAP_IND_4"] = ecart[risque_mask].values
         risk_df.loc[risque_mask, "SCORE_IND_4"] = score[risque_mask].values
 
+        logger.info("END.compute ===>IND4")
         return risk_df
 
     @staticmethod
@@ -186,6 +193,7 @@ class ImportExportIndicators:
             else calcul écart et score
         Paramètres: criticite=3, seuil=1, coeff=0.5
         """
+        logger.info("Start.compute ===>IND5")
         # Paramètres fixes comme en R
         criticite = 3
         seuil = 1
@@ -267,6 +275,7 @@ class ImportExportIndicators:
         risk_df.loc[risque_mask, "GAP_IND_5"] = ecart[risque_mask].values
         risk_df.loc[risque_mask, "SCORE_IND_5"] = score[risque_mask].values
 
+        logger.info("END.compute ===>IND5")
         return risk_df
 
     @staticmethod
@@ -282,6 +291,7 @@ class ImportExportIndicators:
             
         Entreprises avec plus de 5 titres d'export ou d'import
         """
+        logger.info("Start.compute ===>IND7")
         # Initialiser les colonnes si elles n'existent pas
         if "RISQUE_IND_7_A" not in risk_df.columns:
             risk_df["RISQUE_IND_7_A"] = "Non disponible"
@@ -319,4 +329,5 @@ class ImportExportIndicators:
         risk_df.loc[valid_mask_7b, "RISQUE_IND_7_B"] = "vert"
         risk_df.loc[valid_mask_7b & risque_rouge_7b, "RISQUE_IND_7_B"] = "rouge"
 
+        logger.info("END.compute ===>IND7")
         return risk_df

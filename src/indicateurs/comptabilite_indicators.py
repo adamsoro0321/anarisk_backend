@@ -6,7 +6,10 @@ Version optimisée avec opérations vectorisées
 
 import pandas as pd
 import numpy as np
+import logging
 from typing import Tuple
+
+logger = logging.getLogger(__name__)
 
 
 # Colonnes pour le calcul de l'acquisition d'immobilisation (IND_6)
@@ -155,6 +158,7 @@ class ComptabiliteIndicators:
 
         Complexité: O(n) au lieu de O(n²)
         """
+        logger.info("Start.compute ===>IND9")
         # Créer automatiquement les colonnes si elles n'existent pas
         if "RISQUE_IND_9" not in risk_df.columns:
             risk_df["RISQUE_IND_9"] = "Non disponible"
@@ -180,6 +184,7 @@ class ComptabiliteIndicators:
         
         risk_df["RISQUE_IND_9"] = np.select(conditions, choices, default="Non disponible")
         
+        logger.info("END.compute ===>IND9")
         return risk_df
 
     @staticmethod
@@ -198,6 +203,7 @@ class ComptabiliteIndicators:
         
         Complexité: O(n) au lieu de O(n²)
         """
+        logger.info("Start.compute ===>IND6")
         # Créer automatiquement les colonnes si elles n'existent pas
         if "RISQUE_IND_6" not in risk_df.columns:
             risk_df["RISQUE_IND_6"] = "Non disponible"
@@ -261,6 +267,7 @@ class ComptabiliteIndicators:
         risk_df["GAP_IND_6"] = np.where(has_data & ~is_vert, ecart, 0.0)
         risk_df["SCORE_IND_6"] = np.where(has_data & ~is_vert, score, 0)
         
+        logger.info("END.compute ===>IND6")
         return risk_df
 
     @staticmethod
@@ -275,6 +282,7 @@ class ComptabiliteIndicators:
         
         Complexité: O(n) au lieu de O(n²)
         """
+        logger.info("Start.compute ===>IND20")
         # Créer automatiquement les colonnes si elles n'existent pas
         if "RISQUE_IND_20" not in risk_df.columns:
             risk_df["RISQUE_IND_20"] = "Non disponible"
@@ -329,6 +337,7 @@ class ComptabiliteIndicators:
         risk_df["GAP_IND_20"] = np.where(has_data & ~is_vert, ecart, 0.0)
         risk_df["SCORE_IND_20"] = np.where(has_data & ~is_vert, score, 0)
         
+        logger.info("END.compute ===>IND20")
         return risk_df
 
     @staticmethod
@@ -342,6 +351,7 @@ class ComptabiliteIndicators:
         
         Complexité: O(n log n) au lieu de O(n²)
         """
+        logger.info("Start.compute ===>IND21")
         # Créer automatiquement les colonnes si elles n'existent pas
         if "RISQUE_IND_21" not in risk_df.columns:
             risk_df["RISQUE_IND_21"] = "Non disponible"
@@ -402,6 +412,7 @@ class ComptabiliteIndicators:
         
         risk_df["RISQUE_IND_21"] = result["RISQUE_IND_21"].fillna("Non disponible")
         
+        logger.info("END.compute ===>IND21")
         return risk_df
 
     @staticmethod
@@ -415,6 +426,7 @@ class ComptabiliteIndicators:
         
         Complexité: O(n log n) au lieu de O(n²)
         """
+        logger.info("Start.compute ===>IND23")
         # Créer automatiquement les colonnes si elles n'existent pas
         if "RISQUE_IND_23" not in risk_df.columns:
             risk_df["RISQUE_IND_23"] = "Non disponible"
@@ -465,6 +477,7 @@ class ComptabiliteIndicators:
         
         risk_df["RISQUE_IND_23"] = result["RISQUE_IND_23"].fillna("Non disponible")
         
+        logger.info("END.compute ===>IND23")
         return risk_df
 
     @staticmethod
@@ -482,6 +495,7 @@ class ComptabiliteIndicators:
         
         Paramètres R: criticite=4, coeff=0.3, x1=500K, x2=5M, x3=20M, x4=100M
         """
+        logger.info("Start.compute ===>IND24")
         # Paramètres
         criticite = 4
         coeff = 0.3
@@ -589,6 +603,7 @@ class ComptabiliteIndicators:
         risk_df.loc[calc_mask, "GAP_IND_24"] = ecart[calc_mask].values
         risk_df.loc[calc_mask, "SCORE_IND_24"] = score[calc_mask]
 
+        logger.info("END.compute ===>IND24")
         return risk_df
 
     @staticmethod
@@ -606,6 +621,7 @@ class ComptabiliteIndicators:
         
         Paramètres R: criticite=4, coeff=0.2, x1=500K, x2=5M, x3=20M, x4=100M
         """
+        logger.info("Start.compute ===>IND25")
         # Paramètres
         criticite = 4
         coeff = 0.2
@@ -702,6 +718,7 @@ class ComptabiliteIndicators:
         risk_df.loc[calc_mask, "GAP_IND_25"] = ecart[calc_mask].values
         risk_df.loc[calc_mask, "SCORE_IND_25"] = score[calc_mask]
 
+        logger.info("END.compute ===>IND25")
         return risk_df
 
     @staticmethod
@@ -723,6 +740,7 @@ class ComptabiliteIndicators:
         
         Paramètres R: criticite=4, coeff=0.2, x1=500K, x2=5M, x3=20M, x4=100M, seuil_offset=0.1
         """
+        logger.info("Start.compute ===>IND26")
         # Paramètres
         criticite = 4
         coeff = 0.2
@@ -832,6 +850,7 @@ class ComptabiliteIndicators:
         risk_df.loc[calc_mask, "GAP_IND_26"] = ecart[calc_mask].values
         risk_df.loc[calc_mask, "SCORE_IND_26"] = score[calc_mask]
 
+        logger.info("END.compute ===>IND26")
         return risk_df
 
     @staticmethod
@@ -845,6 +864,7 @@ class ComptabiliteIndicators:
         
         Complexité: O(n) au lieu de O(n²)
         """
+        logger.info("Start.compute ===>IND27")
         # Créer automatiquement les colonnes si elles n'existent pas
         if "RISQUE_IND_27" not in risk_df.columns:
             risk_df["RISQUE_IND_27"] = "Non disponible"
@@ -875,6 +895,7 @@ class ComptabiliteIndicators:
             default="vert"
         )
         
+        logger.info("END.compute ===>IND27")
         return risk_df
 
     @staticmethod
@@ -888,6 +909,7 @@ class ComptabiliteIndicators:
         
         Complexité: O(n log n) au lieu de O(n²)
         """
+        logger.info("Start.compute ===>IND29")
         # Créer automatiquement les colonnes si elles n'existent pas
         if "RISQUE_IND_29" not in risk_df.columns:
             risk_df["RISQUE_IND_29"] = "Non disponible"
@@ -929,6 +951,7 @@ class ComptabiliteIndicators:
         
         risk_df["RISQUE_IND_29"] = result["RISQUE_IND_29"].fillna("Non disponible")
         
+        logger.info("END.compute ===>IND29")
         return risk_df
 
     @staticmethod
@@ -950,6 +973,7 @@ class ComptabiliteIndicators:
         # Initialiser la colonne
         if "RISQUE_IND_32" not in risk_df.columns:
             risk_df["RISQUE_IND_32"] = "Non disponible"
+        logger.info("Start.compute ===>IND32")
 
         # Chercher les colonnes avec différentes casses
         def find_col(df, candidates):
@@ -1015,6 +1039,7 @@ class ComptabiliteIndicators:
         risk_df["RISQUE_IND_32"] = risk_df["_RISQUE_32"].fillna("Non disponible")
         risk_df = risk_df.drop(columns=["_RISQUE_32"], errors="ignore")
 
+        logger.info("END.compute ===>IND32")
         return risk_df
 
     @staticmethod
@@ -1039,6 +1064,7 @@ class ComptabiliteIndicators:
         # Initialiser la colonne
         if "RISQUE_IND_33" not in risk_df.columns:
             risk_df["RISQUE_IND_33"] = "Non disponible"
+        logger.info("Start.compute ===>IND33")
 
         # Chercher les colonnes avec différentes casses
         def find_col(df, candidates):
@@ -1107,6 +1133,7 @@ class ComptabiliteIndicators:
         risk_df["RISQUE_IND_33"] = risk_df["_RISQUE_33"].fillna("Non disponible")
         risk_df = risk_df.drop(columns=["_RISQUE_33"], errors="ignore")
 
+        logger.info("END.compute ===>IND33")
         return risk_df
 
     @staticmethod
@@ -1131,6 +1158,7 @@ class ComptabiliteIndicators:
         # Initialiser la colonne
         if "RISQUE_IND_34" not in risk_df.columns:
             risk_df["RISQUE_IND_34"] = "Non disponible"
+        logger.info("Start.compute ===>IND34")
 
         # Chercher les colonnes avec différentes casses
         def find_col(df, candidates):
@@ -1204,6 +1232,7 @@ class ComptabiliteIndicators:
         risk_df["RISQUE_IND_34"] = risk_df["_RISQUE_34"].fillna("Non disponible")
         risk_df = risk_df.drop(columns=["_RISQUE_34"], errors="ignore")
 
+        logger.info("END.compute ===>IND34")
         return risk_df
 
     @staticmethod

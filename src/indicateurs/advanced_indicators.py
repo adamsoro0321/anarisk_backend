@@ -5,7 +5,10 @@ Reproduction des autres fonctions du script R
 
 import pandas as pd
 import numpy as np
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 class AdvancedIndicators:
@@ -27,6 +30,7 @@ class AdvancedIndicators:
         Interprétation: Détecte les incohérences où les créances clients diminuent
         alors que le CA augmente (ratio négatif), ce qui est suspect.
         """
+        logger.info("Start.compute ===>IND37")
         # Initialiser les colonnes
         if "RISQUE_IND_37" not in risk_df.columns:
             risk_df["RISQUE_IND_37"] = "Non disponible"
@@ -109,6 +113,7 @@ class AdvancedIndicators:
         risk_df["RATIO_IND_37"] = risk_df["RATIO_IND_37"].fillna(0)
         risk_df = risk_df.drop(columns=["_RISQUE_37"], errors="ignore")
 
+        logger.info("END.compute ===>IND37")
         return risk_df
 
     @staticmethod
@@ -126,6 +131,7 @@ class AdvancedIndicators:
             
         Note: En R, RATIO_38 est stocké dans DCF_PROG (merged_data), pas dans BD_TVA_Shiny (risk_df)
         """
+        logger.info("Start.compute ===>IND38")
         # Initialiser les colonnes - RISQUE dans risk_df uniquement
         if "RISQUE_IND_38" not in risk_df.columns:
             risk_df["RISQUE_IND_38"] = "Non disponible"
@@ -219,6 +225,7 @@ class AdvancedIndicators:
         risk_df["RISQUE_IND_38"] = risk_df["_RISQUE_38"].fillna("Non disponible")
         risk_df = risk_df.drop(columns=["_RISQUE_38"], errors="ignore")
 
+        logger.info("END.compute ===>IND38")
         return risk_df
 
     @staticmethod
@@ -234,6 +241,7 @@ class AdvancedIndicators:
             4. Si RATIO_39 < 0 ET VAR_CF > 0 → BD_TVA_Shiny$RISQUE_IND_39 = rouge
         Note: En R, RATIO_39 est stocké dans DCF_PROG (merged_data), pas dans BD_TVA_Shiny (risk_df)
         """
+        logger.info("Start.compute ===>IND39")
         # Initialiser les colonnes - RISQUE dans risk_df uniquement
         if "RISQUE_IND_39" not in risk_df.columns:
             risk_df["RISQUE_IND_39"] = "Non disponible"
@@ -326,6 +334,7 @@ class AdvancedIndicators:
         risk_df["RISQUE_IND_39"] = risk_df["_RISQUE_39"].fillna("Non disponible")
         risk_df = risk_df.drop(columns=["_RISQUE_39"], errors="ignore")
 
+        logger.info("END.compute ===>IND39")
         return risk_df
 
     @staticmethod
@@ -344,6 +353,7 @@ class AdvancedIndicators:
         Interprétation: Détecte les entreprises dont les dettes financières
         dépassent 4 fois leur capacité d'autofinancement global (CAFG).
         """
+        logger.info("Start.compute ===>IND46")
         # Chercher les colonnes avec différentes casses
         def find_col(df, candidates):
             for c in candidates:
@@ -419,6 +429,7 @@ class AdvancedIndicators:
         risk_df["RATIO_IND_46"] = risk_df["RATIO_46"].fillna(0)
         risk_df = risk_df.drop(columns=["_RISQUE_46", "RATIO_46"], errors="ignore")
 
+        logger.info("END.compute ===>IND46")
         return risk_df
 
     @staticmethod
@@ -437,6 +448,7 @@ class AdvancedIndicators:
         Interprétation: Détecte les entreprises dont le fonds de roulement
         ne couvre pas suffisamment leur besoin de financement (< 60%).
         """
+        logger.info("Start.compute ===>IND47")
         # Chercher les colonnes avec différentes casses
         def find_col(df, candidates):
             for c in candidates:
@@ -512,6 +524,7 @@ class AdvancedIndicators:
         risk_df["RATIO_IND_47"] = risk_df["RATIO_47"].fillna(0)
         risk_df = risk_df.drop(columns=["_RISQUE_47", "RATIO_47"], errors="ignore")
 
+        logger.info("END.compute ===>IND47")
         return risk_df
 
     @staticmethod
@@ -529,6 +542,7 @@ class AdvancedIndicators:
             
         Note: En R, RATIO_49 et MEDIAN_RATIO_49 sont stockés dans DCF_PROG (merged_data)
         """
+        logger.info("Start.compute ===>IND49")
         # Initialiser les colonnes - RISQUE dans risk_df uniquement
         if "RISQUE_IND_49" not in risk_df.columns:
             risk_df["RISQUE_IND_49"] = "Non disponible"
@@ -623,6 +637,7 @@ class AdvancedIndicators:
         risk_df["RISQUE_IND_49"] = risk_df["_RISQUE_49"].fillna("Non disponible")
         risk_df = risk_df.drop(columns=["_RISQUE_49"], errors="ignore")
 
+        logger.info("END.compute ===>IND49")
         return risk_df
 
     @staticmethod
@@ -641,6 +656,7 @@ class AdvancedIndicators:
         Interprétation: Pour le secteur minier, évalue la rentabilité des capitaux propres.
         Un ratio > 5% est considéré comme satisfaisant.
         """
+        logger.info("Start.compute ===>IND57")
         # Initialiser les colonnes
         if "RISQUE_IND_57" not in risk_df.columns:
             risk_df["RISQUE_IND_57"] = "Non disponible"
@@ -727,6 +743,7 @@ class AdvancedIndicators:
         risk_df["RISQUE_IND_57"] = risk_df["_RISQUE_57"].fillna("Non disponible")
         risk_df = risk_df.drop(columns=["_RISQUE_57"], errors="ignore")
 
+        logger.info("END.compute ===>IND57")
         return risk_df
 
     @staticmethod
@@ -744,6 +761,7 @@ class AdvancedIndicators:
             
         Note: En R, RATIO_58 est stocké dans DCF_PROG (merged_data), pas dans BD_TVA_Shiny (risk_df)
         """
+        logger.info("Start.compute ===>IND58")
         # Initialiser les colonnes - RISQUE dans risk_df uniquement
         if "RISQUE_IND_58" not in risk_df.columns:
             risk_df["RISQUE_IND_58"] = "Non disponible"
@@ -840,4 +858,5 @@ class AdvancedIndicators:
         risk_df["RISQUE_IND_58"] = risk_df["_RISQUE_58"].fillna("Non disponible")
         risk_df = risk_df.drop(columns=["_RISQUE_58"], errors="ignore")
 
+        logger.info("END.compute ===>IND58")
         return risk_df

@@ -11,9 +11,12 @@ Indicateurs couverts:
 
 import pandas as pd
 import numpy as np
+import logging
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 class ControleIndicators:
@@ -59,6 +62,7 @@ class ControleIndicators:
         
         Version optimisée avec assignation directe.
         """
+        logger.info("Start.compute ===>IND15")
         # Date seuil
         date_seuil = (
             cls._get_date_seuil(cls.SEUIL_ANNEES_IND_15, date_reference)
@@ -83,6 +87,7 @@ class ControleIndicators:
         mask_15B = (date_vp < date_seuil_ns) & (date_avis < date_seuil_ns)
         risk_df.loc[mask_15B, "RISQUE_IND_15_B"] = "rouge"
 
+        logger.info("END.compute ===>IND15")
         return risk_df
 
     @classmethod
@@ -100,6 +105,7 @@ class ControleIndicators:
         
         Version optimisée avec assignation directe.
         """
+        logger.info("Start.compute ===>IND16")
         # Date seuil (4 ans)
         date_seuil = (
             cls._get_date_seuil(cls.SEUIL_ANNEES_IND_16, date_reference)
@@ -118,6 +124,7 @@ class ControleIndicators:
         mask_16 = (date_vg < date_seuil_ns) & pd.isna(date_avis)
         risk_df.loc[mask_16, "RISQUE_IND_16"] = "rouge"
 
+        logger.info("END.compute ===>IND16")
         return risk_df
 
     @classmethod
@@ -127,7 +134,7 @@ class ControleIndicators:
         Retourne un array numpy pour meilleure performance.
         """
         mask_rouge = (
-            (risk_df["RISQUE_IND_15_A"] == "rouge") | 
+            (risk_df["RISQUE_IND_15_A"] == "rouge") |
             (risk_df["RISQUE_IND_15_B"] == "rouge")
         )
         return risk_df.loc[mask_rouge, "NUM_IFU"].unique()
@@ -141,9 +148,11 @@ class ControleIndicators:
         date_reference: Optional[datetime] = None
     ) -> pd.DataFrame:
         """Calcule tous les indicateurs de contrôle en une seule fois."""
+        logger.info("=== START: Groupe Controle (IND 15A, 15B, 16, 30) ===")
         risk_df = cls.calculate_indicator_15(merged_data, risk_df, use_dynamic_date, date_reference)
         risk_df = cls.calculate_indicator_16(merged_data, risk_df, use_dynamic_date, date_reference)
         risk_df = cls.calculate_indicator_30(merged_data, risk_df)
+        logger.info("=== END: Groupe Controle ===")
         return risk_df
 
     @staticmethod
@@ -185,6 +194,7 @@ class ControleIndicators:
         Interprétation: Détecte les situations suspectes où le résultat financier 
         diminue (ratio négatif) alors que les provisions augmentent (ratio positif).
         """
+        logger.info("Start.compute ===>IND30")
         # Initialiser la colonne
         if "RISQUE_IND_30" not in risk_df.columns:
             risk_df["RISQUE_IND_30"] = "Non disponible"
@@ -272,4 +282,5 @@ class ControleIndicators:
         risk_df["RISQUE_IND_30"] = risk_df["_RISQUE_30"].fillna("Non disponible")
         risk_df = risk_df.drop(columns=["_RISQUE_30"], errors="ignore")
 
+        logger.info("END.compute ===>IND30")
         return risk_df
