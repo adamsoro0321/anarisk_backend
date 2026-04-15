@@ -4,7 +4,11 @@ Gère les endpoints d'exploration des dossiers fiches, structures, sous-structur
 """
 from flask import Blueprint, jsonify, request, current_app, send_file
 import os
+import zipfile
+from io import BytesIO
+from pathlib import Path
 from dir_reader import get_dir_reader, DirReader
+from api_utils.utils import token_required
 
 fiche_bp = Blueprint('fiches', __name__)
 
@@ -21,6 +25,7 @@ def get_reader() -> DirReader:
 # ========== ENDPOINTS NIVEAU 0: PROGRAMMES ==========
 
 @fiche_bp.route('/fiches', methods=['GET'])
+@token_required
 def list_programmes():
     """
     Liste tous les fiches disponibles
@@ -56,6 +61,7 @@ def list_programmes():
 # ========== ENDPOINTS NIVEAU 1: STRUCTURES ==========
 
 @fiche_bp.route('/fiches/<programme_name>/structures', methods=['GET'])
+@token_required
 def list_structures(programme_name: str):
     """
     Liste toutes les structures d'un programme
@@ -64,17 +70,25 @@ def list_structures(programme_name: str):
         programme_name: Nom du programme (ex: 'programme_2025_12_25')
     
     Returns:
-        JSON avec la liste des structures
+        JSON avec la liste des structures (filtrées par UR si l'utilisateur est un UR)
     """
     try:
         reader = get_reader()
         structures = reader.list_structures(programme_name)
         
+        # Filtrer par UR si l'utilisateur est un UR
+        user_ur = getattr(request, 'user_ur', None)
+        if user_ur:
+            # Filtrer les structures pour ne retourner que celle correspondant à l'UR
+            structures = [s for s in structures if s.get('code') == user_ur]
+            current_app.logger.info(f"Structures filtrées pour UR: {user_ur}")
+        
         return jsonify({
             'success': True,
             'programme': programme_name,
             'count': len(structures),
-            'data': structures
+            'data': structures,
+            'filtered_by_ur': user_ur is not None
         }), 200
         
     except FileNotFoundError as e:
@@ -95,6 +109,7 @@ def list_structures(programme_name: str):
 # ========== ENDPOINTS NIVEAU 2: SOUS-STRUCTURES ==========
 
 @fiche_bp.route('/fiches/<programme_name>/structures/<structure_code>/sous-structures', methods=['GET'])
+@token_required
 def list_sous_structures(programme_name: str, structure_code: str):
     """
     Liste toutes les sous-structures d'une structure
@@ -136,6 +151,7 @@ def list_sous_structures(programme_name: str, structure_code: str):
 # ========== ENDPOINTS NIVEAU 3: BRIGADES ==========
 
 @fiche_bp.route('/fiches/<programme_name>/structures/<structure_code>/sous-structures/<sous_structure_name>/brigades', methods=['GET'])
+@token_required
 def list_brigades(programme_name: str, structure_code: str, sous_structure_name: str):
     """
     Liste toutes les brigades d'une sous-structure
@@ -146,11 +162,18 @@ def list_brigades(programme_name: str, structure_code: str, sous_structure_name:
         sous_structure_name: Nom de la sous-structure
     
     Returns:
-        JSON avec la liste des brigades
+        JSON avec la liste des brigades (filtrées par brigade si l'utilisateur est une brigade)
     """
     try:
         reader = get_reader()
         brigades = reader.list_brigades(programme_name, structure_code, sous_structure_name)
+        
+        # Filtrer par brigade si l'utilisateur est une brigade
+        user_brigade = getattr(request, 'user_brigade', None)
+        if user_brigade:
+            # Filtrer les brigades pour ne retourner que celle correspondant à la brigade de l'utilisateur
+            brigades = [b for b in brigades if b.get('name') == user_brigade]
+            current_app.logger.info(f"Brigades filtrées pour brigade: {user_brigade}")
         
         return jsonify({
             'success': True,
@@ -158,7 +181,8 @@ def list_brigades(programme_name: str, structure_code: str, sous_structure_name:
             'structure': structure_code,
             'sous_structure': sous_structure_name,
             'count': len(brigades),
-            'data': brigades
+            'data': brigades,
+            'filtered_by_brigade': user_brigade is not None
         }), 200
         
     except FileNotFoundError as e:
@@ -176,9 +200,83 @@ def list_brigades(programme_name: str, structure_code: str, sous_structure_name:
         }), 500
 
 
+@fiche_bp.route('/fiches/<programme_name>/structures/<structure_code>/sous-structures/<sous_structure_name>/brigades/<brigade_name>/download-zip', methods=['GET'])
+@token_required
+def download_brigade_zip(programme_name: str, structure_code: str, 
+                         sous_structure_name: str, brigade_name: str):
+    """
+    Télécharge tous les fichiers d'une brigade en format ZIP
+    
+    Args:
+        programme_name: Nom du programme
+        structure_code: Code de la structure
+        sous_structure_name: Nom de la sous-structure
+        brigade_name: Nom de la brigade
+    
+    Returns:
+        Fichier ZIP contenant tous les fichiers de la brigade
+    """
+    try:
+        reader = get_reader()
+        
+        # Récupérer tous les fichiers de la brigade
+        files = reader.list_files_in_brigade(
+            programme_name, structure_code, sous_structure_name, brigade_name
+        )
+        
+        if not files:
+            return jsonify({
+                'success': False,
+                'message': 'Aucun fichier trouvé dans cette brigade',
+                'error_code': 'NO_FILES_FOUND'
+            }), 404
+        
+        # Créer le ZIP en mémoire
+        zip_buffer = BytesIO()
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for file_info in files:
+                file_path = Path(file_info['path'])
+                
+                if file_path.exists() and file_path.is_file():
+                    # Ajouter le fichier au ZIP avec son nom simple
+                    zip_file.write(file_path, arcname=file_info['name'])
+                    current_app.logger.info(f"Ajout du fichier au ZIP: {file_info['name']}")
+        
+        # Préparer le buffer pour l'envoi
+        zip_buffer.seek(0)
+        
+        # Nom du fichier ZIP descriptif: brigade_structure_programme.zip
+        zip_filename = f"{brigade_name}_{structure_code}_{programme_name}.zip"
+        
+        current_app.logger.info(f"ZIP créé avec {len(files)} fichiers: {zip_filename}")
+        
+        return send_file(
+            zip_buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=zip_filename
+        )
+        
+    except FileNotFoundError as e:
+        return jsonify({
+            'success': False,
+            'message': str(e),
+            'error_code': 'BRIGADE_NOT_FOUND'
+        }), 404
+    except Exception as e:
+        current_app.logger.error(f"Erreur dans download_brigade_zip: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Erreur lors de la création du fichier ZIP',
+            'error_code': 'ZIP_CREATION_ERROR'
+        }), 500
+
+
 # ========== ENDPOINTS NIVEAU 4: FICHIERS ==========
 
 @fiche_bp.route('/fiches/<programme_name>/structures/<structure_code>/sous-structures/<sous_structure_name>/brigades/<brigade_name>/files', methods=['GET'])
+@token_required
 def list_files_in_brigade(programme_name: str, structure_code: str, 
                           sous_structure_name: str, brigade_name: str):
     """
@@ -225,6 +323,7 @@ def list_files_in_brigade(programme_name: str, structure_code: str,
 
 
 @fiche_bp.route('/fiches/<programme_name>/structures/<structure_code>/sous-structures/<sous_structure_name>/brigades/<brigade_name>/contribuables', methods=['GET'])
+@token_required
 def list_contribuables_in_brigade(programme_name: str, structure_code: str,
                                   sous_structure_name: str, brigade_name: str):
     """
@@ -273,6 +372,7 @@ def list_contribuables_in_brigade(programme_name: str, structure_code: str,
 # ========== ENDPOINTS DE RECHERCHE ==========
 
 @fiche_bp.route('/fiches/search/ifu/<ifu>', methods=['GET'])
+@token_required
 def search_by_ifu(ifu: str):
     """
     Recherche tous les fichiers d'un contribuable par son IFU
@@ -310,6 +410,7 @@ def search_by_ifu(ifu: str):
 
 
 @fiche_bp.route('/fiches/search/files', methods=['GET'])
+@token_required
 def search_files():
     """
     Recherche des fichiers par pattern
@@ -359,6 +460,7 @@ def search_files():
 # ========== ENDPOINTS POUR FICHIERS CONTRIBUABLE ==========
 
 @fiche_bp.route('/fiches/<programme_name>/contribuable/<ifu>/files', methods=['GET'])
+@token_required
 def get_contribuable_files(programme_name: str, ifu: str):
     """
     Obtient tous les fichiers associés à un contribuable
@@ -404,6 +506,7 @@ def get_contribuable_files(programme_name: str, ifu: str):
 # ========== ENDPOINTS STATISTIQUES ==========
 
 @fiche_bp.route('/fiches/stats', methods=['GET'])
+@token_required
 def get_global_stats():
     """
     Obtient les statistiques globales de tous les fiches
@@ -430,6 +533,7 @@ def get_global_stats():
 
 
 @fiche_bp.route('/fiches/<programme_name>/stats', methods=['GET'])
+@token_required
 def get_programme_stats(programme_name: str):
     """
     Obtient les statistiques d'un programme
@@ -465,6 +569,7 @@ def get_programme_stats(programme_name: str):
 
 
 @fiche_bp.route('/fiches/<programme_name>/structures/<structure_code>/stats', methods=['GET'])
+@token_required
 def get_structure_stats(programme_name: str, structure_code: str):
     """
     Obtient les statistiques d'une structure
@@ -503,6 +608,7 @@ def get_structure_stats(programme_name: str, structure_code: str):
 # ========== ENDPOINT POUR SERVIR LES FICHIERS ==========
 
 @fiche_bp.route('/fiches/<programme_name>/structures/<structure_code>/sous-structures/<sous_structure_name>/brigades/<brigade_name>/files/<filename>', methods=['GET'])
+@token_required
 def download_file(programme_name: str, structure_code: str, 
                   sous_structure_name: str, brigade_name: str, filename: str):
     """
@@ -553,56 +659,5 @@ def download_file(programme_name: str, structure_code: str,
             'error_code': 'INTERNAL_SERVER_ERROR'
         }), 500
 
-
-# ========== ENDPOINT POUR GENERER LES FICHES ==========
-
-@fiche_bp.route('/generate-fiches', methods=['POST'])
-def generate_fiches():
-    """
-    Génère les fiches à partir d'un fichier programme Excel (quantum)
-    
-    Expects:
-        - quantum_name: Nom du quantum/fichier programme (dans body JSON)
-    
-    Returns:
-        JSON avec le résultat de la génération
-    """
-    try:
-        # Récupérer le nom du quantum depuis le body
-        data = request.get_json()
-        if not data or 'quantum_name' not in data:
-            return jsonify({
-                'success': False,
-                'message': 'Le paramètre quantum_name est requis',
-                'error_code': 'MISSING_PARAMETER'
-            }), 400
-        
-        quantum_name = data['quantum_name']
-        
-        # TODO: Implémenter la logique de génération des fiches
-        # 1. Lire le fichier Excel depuis le dossier programmes
-        # 2. Extraire les données nécessaires
-        # 3. Générer les fiches pour chaque contribuable
-        # 4. Organiser les fiches par structure/sous-structure/brigade
-        
-        current_app.logger.info(f"Génération des fiches demandée pour: {quantum_name}")
-        
-        return jsonify({
-            'success': True,
-            'message': f'Génération des fiches pour "{quantum_name}" lancée avec succès',
-            'data': {
-                'quantum_name': quantum_name,
-                'status': 'pending'
-            }
-        }), 202  # 202 Accepted - traitement en cours
-        
-    except Exception as e:
-        current_app.logger.error(f"Erreur lors de la génération des fiches: {str(e)}")
-        return jsonify({
-            'success': False,
-            'message': 'Erreur lors de la génération des fiches',
-            'error_code': 'GENERATION_ERROR',
-            'details': str(e) if current_app.debug else None
-        }), 500
 
 

@@ -22,10 +22,15 @@ def get_users():
         pagination = users_query.paginate(page=page, per_page=per_page, error_out=False)
         
         users = [{
+            'id': user.id,
             'nom': user.nom,
             'prenom': user.prenom,
             'email': user.email,
             'status': user.status,
+            'ur': user.ur,
+            'brigade': user.brigade,
+            'date_creation': user.date_creation.isoformat() if user.date_creation else None,
+            'date_modification': user.date_modification.isoformat() if user.date_modification else None,
             'roles': [role.intitule for role in user.roles]
         } for user in pagination.items]
         
@@ -56,14 +61,19 @@ def create_user():
         - email (str): Email de l'utilisateur
         - password (str): Mot de passe de l'utilisateur
         - role (str): Rôle à assigner à l'utilisateur (ex: 'admin', 'analyste', etc.)
+        - ur (str, optional): Unité de recouvrement
+        - brigade (str, optional): Brigade d'affectation
     """
     try:
         data = request.get_json()
         nom = data.get('nom')
         prenom = data.get('prenom')
         email = data.get('email')
-        password = data.get('password', default="password123")  # Mot de passe par défaut si non fourni
+        password = data.get('password', "password123")  # Mot de passe par défaut si non fourni
         role = data.get('role', 'user')  # Rôle par défaut 'user'
+        ur = data.get('ur')
+        brigade = data.get('brigade')
+        
         if not all([nom, prenom, email, password]):
             return jsonify({
                 'success': False,
@@ -76,16 +86,20 @@ def create_user():
                 'message': 'Un utilisateur avec cet email existe déjà',
                 'error_code': 'EMAIL_ALREADY_EXISTS'
             }), 400
-        user = User(nom=nom, prenom=prenom, email=email)
+        
+        user = User(nom=nom, prenom=prenom, email=email, ur=ur, brigade=brigade)
         user.set_password(password)
+        
         role_obj = Role.query.filter_by(intitule=role).first()
         if not role_obj:
             role_obj = Role(intitule=role)
             db.session.add(role_obj)
             db.session.flush()  # Flush pour obtenir l'ID du rôle
         user.roles.append(role_obj)
+        
         db.session.add(user)
         db.session.commit()
+        
         return jsonify({
             'success': True,
             'message': 'Utilisateur créé avec succès',
@@ -94,6 +108,8 @@ def create_user():
                 'nom': user.nom,
                 'prenom': user.prenom,
                 'email': user.email,
+                'ur': user.ur,
+                'brigade': user.brigade,
                 'roles': [role.intitule for role in user.roles]
             }
         }), 201

@@ -59,7 +59,8 @@ class User(db.Model):
     status: Mapped[str] = mapped_column(String(20), default='active', nullable=False)
     date_creation: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     date_modification: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=lambda: datetime.now(timezone.utc))
-    
+    ur: Mapped[Optional[str]] = mapped_column(String(50))  # Unité de recouvrement
+    brigade: Mapped[Optional[str]] = mapped_column(String(50))  # Brigade d'affectation
     #role = Mapped[Optional[str]] = mapped_column(String(50))  # Rôle principal (ex: 'admin', 'analyste', etc.)
     # Relations
     roles: Mapped[List["Role"]] = relationship(
@@ -216,6 +217,9 @@ class Quantume(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     libelle: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
     date_creation: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    is_active: Mapped[bool] = mapped_column(default=True, nullable=True)
+    steps: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # 'preliste' | 'programme' | 'fiches'
+
     def __repr__(self):
         return f'<Quantume {self.libelle}>'
 

@@ -45,6 +45,10 @@ class Config:
     MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB
     CHUNK_SIZE = 1000  # Pour le traitement par lots
     
+    #appscheduler
+    SCHEDULER_API_ENABLED = True
+    
+    
     @classmethod
     def init_app(cls):
         cls.LOGS_DIR.mkdir(exist_ok=True)

@@ -136,26 +136,14 @@ class AdvancedIndicators:
         if "RISQUE_IND_38" not in risk_df.columns:
             risk_df["RISQUE_IND_38"] = "Non disponible"
 
-        # Chercher les colonnes avec différentes casses
-        def find_col(df, candidates):
-            for c in candidates:
-                if c in df.columns:
-                    return c
-                if c.upper() in df.columns:
-                    return c.upper()
-                if c.lower() in df.columns:
-                    return c.lower()
-            return None
 
-        ibenef_col = find_col(merged_data, ["IBENEF_EXIGIBLE", "ibenef_exigible"])
-        ca_col = find_col(merged_data, ["XB_CA_31_12_N_Net", "XB_CA_31_12_N_NET"])
-        bi_col = find_col(merged_data, ["BI_Clients_Exer31_12_N_Net", "BI_CLIENTS_EXER31_12_N_NET"])
+        ibenef_col ="IBENEF_EXIGIBLE"
+        ca_col = "XB_CA_31_12_N_NET"
+        bi_col ="BI_CLIENTS_EXER31_12_N_NET"
         ifu_col = "NUM_IFU"
-        annee_col = "ANNEE_FISCAL" if "ANNEE_FISCAL" in merged_data.columns else "ANNEE"
+        annee_col = "ANNEE"
 
-        # Vérifier les colonnes requises
-        if ibenef_col is None or ca_col is None:
-            return risk_df
+
 
         df = merged_data.copy()
 
@@ -197,19 +185,19 @@ class AdvancedIndicators:
         # Stocker RATIO_38 dans merged_data (comme en R: DCF_PROG$RATIO_38)
         result_map = df[[ifu_col, annee_col, "RATIO_38", "_RISQUE_38"]].drop_duplicates(subset=[ifu_col, annee_col], keep="first")
 
-        # Mettre à jour merged_data avec RATIO_38
-        annee_merged_col = annee_col
-        if "RATIO_38" not in merged_data.columns:
-            merged_data["RATIO_38"] = 0.0
-        for idx, row in result_map.iterrows():
-            mask = (merged_data[ifu_col] == row[ifu_col]) & (merged_data[annee_merged_col] == row[annee_col])
-            merged_data.loc[mask, "RATIO_38"] = row["RATIO_38"]
+        # Mettre à jour merged_data avec RATIO_38 (vectorisé - évite iterrows O(n²))
+        merged_data["RATIO_38"] = (
+            merged_data[[ifu_col, annee_col]]
+            .merge(result_map[[ifu_col, annee_col, "RATIO_38"]], on=[ifu_col, annee_col], how="left")["RATIO_38"]
+            .fillna(0)
+            .values
+        )
 
         # Stocker le nombre de lignes original
         original_len = len(risk_df)
 
         # Merger uniquement RISQUE avec risk_df (pas RATIO)
-        annee_risk_col = "ANNEE_FISCAL" if "ANNEE_FISCAL" in risk_df.columns else "ANNEE"
+        annee_risk_col ="ANNEE"
         risk_df = risk_df.merge(
             result_map[[ifu_col, annee_col, "_RISQUE_38"]].rename(columns={annee_col: annee_risk_col}),
             on=[ifu_col, annee_risk_col],
@@ -306,13 +294,13 @@ class AdvancedIndicators:
         # Stocker RATIO_39 dans merged_data (comme en R: DCF_PROG$RATIO_39)
         result_map = df[[ifu_col, annee_col, "RATIO_39", "_RISQUE_39"]].drop_duplicates(subset=[ifu_col, annee_col], keep="first")
 
-        # Mettre à jour merged_data avec RATIO_39
-        annee_merged_col = annee_col
-        if "RATIO_39" not in merged_data.columns:
-            merged_data["RATIO_39"] = 0.0
-        for idx, row in result_map.iterrows():
-            mask = (merged_data[ifu_col] == row[ifu_col]) & (merged_data[annee_merged_col] == row[annee_col])
-            merged_data.loc[mask, "RATIO_39"] = row["RATIO_39"]
+        # Mettre à jour merged_data avec RATIO_39 (vectorisé - évite iterrows O(n²))
+        merged_data["RATIO_39"] = (
+            merged_data[[ifu_col, annee_col]]
+            .merge(result_map[[ifu_col, annee_col, "RATIO_39"]], on=[ifu_col, annee_col], how="left")["RATIO_39"]
+            .fillna(0)
+            .values
+        )
 
         # Stocker le nombre de lignes original
         original_len = len(risk_df)
@@ -365,7 +353,7 @@ class AdvancedIndicators:
                     return c.lower()
             return None
 
-        dd_col = find_col(merged_data, ["DD_TtlDetFinRessAssim_Exer31_12_N_Net", "DD_TTLDETFINRESSASSIM_EXER31_12_N_NET"])
+        dd_col = find_col(merged_data, ["DD_TTLDETFINRESSASSIM_EXER31_12_N_NET"])
         cafg_col = find_col(merged_data, ["CAFG", "cafg"])
         ifu_col = "NUM_IFU"
         annee_col = "ANNEE_FISCAL" if "ANNEE_FISCAL" in merged_data.columns else "ANNEE"
@@ -606,16 +594,12 @@ class AdvancedIndicators:
         # Stocker RATIO_49 et MEDIAN_RATIO_49 dans merged_data (comme en R: DCF_PROG)
         result_map = df[[ifu_col, annee_col, "RATIO_49", "MEDIAN_RATIO_49", "_RISQUE_49"]].drop_duplicates(subset=[ifu_col, annee_col], keep="first")
         
-        # Mettre à jour merged_data avec RATIO_49 et MEDIAN_RATIO_49
-        annee_merged_col = annee_col
-        if "RATIO_49" not in merged_data.columns:
-            merged_data["RATIO_49"] = 0.0
-        if "MEDIAN_RATIO_49" not in merged_data.columns:
-            merged_data["MEDIAN_RATIO_49"] = 0.0
-        for idx, row in result_map.iterrows():
-            mask = (merged_data[ifu_col] == row[ifu_col]) & (merged_data[annee_merged_col] == row[annee_col])
-            merged_data.loc[mask, "RATIO_49"] = row["RATIO_49"]
-            merged_data.loc[mask, "MEDIAN_RATIO_49"] = row["MEDIAN_RATIO_49"]
+        # Mettre à jour merged_data avec RATIO_49 et MEDIAN_RATIO_49 (vectorisé - évite iterrows O(n²))
+        _tmp = merged_data[[ifu_col, annee_col]].merge(
+            result_map[[ifu_col, annee_col, "RATIO_49", "MEDIAN_RATIO_49"]], on=[ifu_col, annee_col], how="left"
+        )
+        merged_data["RATIO_49"] = _tmp["RATIO_49"].fillna(0).values
+        merged_data["MEDIAN_RATIO_49"] = _tmp["MEDIAN_RATIO_49"].fillna(0).values
         
         # Stocker le nombre de lignes original
         original_len = len(risk_df)
@@ -830,13 +814,13 @@ class AdvancedIndicators:
         # Stocker RATIO_58 dans merged_data (comme en R: DCF_PROG$RATIO_58)
         result_map = df[[ifu_col, annee_col, "RATIO_58", "_RISQUE_58"]].drop_duplicates(subset=[ifu_col, annee_col], keep="first")
         
-        # Mettre à jour merged_data avec RATIO_58
-        annee_merged_col = annee_col
-        if "RATIO_58" not in merged_data.columns:
-            merged_data["RATIO_58"] = 0.0
-        for idx, row in result_map.iterrows():
-            mask = (merged_data[ifu_col] == row[ifu_col]) & (merged_data[annee_merged_col] == row[annee_col])
-            merged_data.loc[mask, "RATIO_58"] = row["RATIO_58"]
+        # Mettre à jour merged_data avec RATIO_58 (vectorisé - évite iterrows O(n²))
+        merged_data["RATIO_58"] = (
+            merged_data[[ifu_col, annee_col]]
+            .merge(result_map[[ifu_col, annee_col, "RATIO_58"]], on=[ifu_col, annee_col], how="left")["RATIO_58"]
+            .fillna(0)
+            .values
+        )
         
         # Stocker le nombre de lignes original
         original_len = len(risk_df)

@@ -262,6 +262,8 @@ class RiskComputer:
         self.logger.info("=== START: Groupe Controle (IND 15A, 15B, 30) ===")
         result = ControleIndicators.calculate_all_indicators(merged_data,result)
         self.logger.info("=== END: Groupe Controle ===")
+        #m = (result["RISQUE_IND_15_A"]=="rouge") & (result["RISQUE_IND_15_B"]=="rouge")
+        #result = result[m]
 
         # Indicateurs TVA (1, 2, 8,10, 12, 13, 14)
         self.logger.info("=== START: Groupe TVA (IND 1, 2, 8, 10, 12, 13, 14) ===")
@@ -388,8 +390,9 @@ class RiskComputer:
             os.makedirs(output_dir, exist_ok=True)
 
             # Sauvegarde du fichier CSV
-            
-            file_path =  f"{output_dir}/{quantume_name}" if quantume_name else f"{output_dir}/RISK_INDICATEUR_CONTRIBUABLES_{pd.Timestamp.now().strftime('%Y%m%d')}.csv"
+            m = (results_data["RISQUE_IND_15_A"]=="rouge") & (results_data["RISQUE_IND_15_B"]=="rouge")
+            results_data = results_data[m]
+            file_path =  f"{output_dir}/{quantume_name}.csv" if quantume_name else f"{output_dir}/RISK_INDICATEUR_CONTRIBUABLES_{pd.Timestamp.now().strftime('%Y%m%d')}.csv"
             results_data.to_csv(file_path, index=False, sep=";")
             
             self.logger.info(f"=== ANALYSE TERMINÉE EN {elapsed_time:.2f}s ===")

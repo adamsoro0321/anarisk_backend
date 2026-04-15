@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Utilitaires JWT
 # ============================================================================
 
-def generate_token(user_id: int, email: str, role: str) -> str:
+def generate_token(user_id: int, email: str, role: str, ur: str = None, brigade: str = None) -> str:
     """
     Génère un token JWT pour l'utilisateur
     
@@ -28,6 +28,8 @@ def generate_token(user_id: int, email: str, role: str) -> str:
         user_id: ID de l'utilisateur
         email: Email de l'utilisateur
         role: Rôle de l'utilisateur
+        ur: Unité de Renseignement (optionnel)
+        brigade: Brigade d'affectation (optionnel)
         
     Returns:
         str: Token JWT encodé
@@ -36,6 +38,8 @@ def generate_token(user_id: int, email: str, role: str) -> str:
         'user_id': user_id,
         'email': email,
         'role': role,
+        'ur': ur,
+        'brigade': brigade,
         'exp': datetime.now(timezone.utc) + timedelta(hours=current_app.config['JWT_EXPIRATION_HOURS']),
         'iat': datetime.now(timezone.utc)
     }
@@ -98,6 +102,8 @@ def token_required(f):
         request.user_id = payload['user_id']
         request.user_email = payload['email']
         request.user_role = payload['role']
+        request.user_ur = payload.get('ur')
+        request.user_brigade = payload.get('brigade')
         
         return f(*args, **kwargs)
     return decorated

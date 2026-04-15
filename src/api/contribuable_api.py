@@ -637,3 +637,99 @@ def create_programme():
             'success': False,
             'message': f'Erreur lors de la création du programme: {str(e)}'
         }), 500
+        
+@contribuable_bp.route("/contribuables/fournisseurs", methods=["GET"])
+def get_fournisseur():
+    """Obtenir les fournisseurs d'un contribuable
+    Query Parameters:
+        ifu (str): Numéro IFU du contribuable
+    Returns:
+        JSON avec les données des fournisseurs
+    """
+    try:
+        # Récupérer l'IFU depuis les paramètres de requête
+        ifu = request.args.get('ifu')
+        
+        if not ifu:
+            return jsonify({
+                'success': False,
+                'message': 'Le paramètre "ifu" est obligatoire'
+            }), 400
+        
+        # Initialiser le service
+        service = ContribuableService()
+        
+        # Récupérer les données via le service
+        result = service.get_contribuable_fournisseur_data(ifu)
+        
+        if not result.get('found', False):
+            return jsonify({
+                'success': True,
+                'message': 'Aucune donnée de fournisseurs trouvée pour ce contribuable',
+                'ifu': ifu,
+                'data': []
+            }), 200
+        
+        return jsonify({
+            'success': True,
+            'ifu': ifu,
+            'count': result.get('count', 0),
+            'data': result.get('data', []),
+            'summary': result.get('summary', {})
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Erreur lors de la récupération des fournisseurs: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erreur lors de la récupération des données: {str(e)}',
+            'data': []
+        }), 500
+
+@contribuable_bp.route("/contribuables/clients", methods=["GET"])
+def get_client():
+    """Obtenir les clients d'un contribuable
+    Query Parameters:
+        ifu (str): Numéro IFU du contribuable
+    Returns:
+        JSON avec les données des clients
+    """
+    try:
+        # Récupérer l'IFU depuis les paramètres de requête
+        ifu = request.args.get('ifu')
+        
+        if not ifu:
+            return jsonify({
+                'success': False,
+                'message': 'Le paramètre "ifu" est obligatoire'
+            }), 400
+        
+        # Initialiser le service
+        service = ContribuableService()
+        
+        # Récupérer les données via le service
+        result = service.get_contribuable_client_data(ifu)
+        
+        if not result.get('found', False):
+            return jsonify({
+                'success': True,
+                'message': 'Aucune donnée de clients trouvée pour ce contribuable',
+                'ifu': ifu,
+                'data': []
+            }), 200
+        
+        return jsonify({
+            'success': True,
+            'ifu': ifu,
+            'count': result.get('count', 0),
+            'data': result.get('data', []),
+            'summary': result.get('summary', {})
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Erreur lors de la récupération des clients: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erreur lors de la récupération des données: {str(e)}',
+            'data': []
+        }), 500

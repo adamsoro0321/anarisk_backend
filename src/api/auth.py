@@ -72,8 +72,8 @@ def login():
         # Récupérer le rôle principal de l'utilisateur
         user_role = user.roles[0].intitule if user.roles else 'user'
         
-        # Générer le token JWT
-        token = generate_token(user.id, user.email, user_role)
+        # Générer le token JWT avec ur et brigade
+        token = generate_token(user.id, user.email, user_role, user.ur, user.brigade)
         
         return jsonify({
             'success': True,
@@ -85,7 +85,9 @@ def login():
                 'nom': user.nom,
                 'prenom': user.prenom,
                 'role': user_role,
-                'roles': [role.intitule for role in user.roles]
+                'roles': [role.intitule for role in user.roles],
+                'ur': user.ur,
+                'brigade': user.brigade
             }
         }), 200
             
@@ -122,7 +124,9 @@ def register():
         "password": "password123",
         "nom": "Nom",
         "prenom": "Prenom",
-        "role": "user"  // optionnel, défaut: "user"
+        "role": "user",  // optionnel, défaut: "user"
+        "ur": "DGE",  // optionnel, Unité de Renseignement
+        "brigade": "BV1_DGE"  // optionnel, Brigade d'affectation
     }
     """
     try:
@@ -139,6 +143,9 @@ def register():
         nom = data.get('nom')
         prenom = data.get('prenom')
         role = data.get('role', 'user')
+        ur = data.get('ur')
+        brigade = data.get('brigade')
+        status = data.get('status', 'active')
         
         # Validation des champs requis
         if not email or not password:
@@ -146,6 +153,13 @@ def register():
                 'success': False,
                 'message': 'Email et mot de passe requis',
                 'error_code': 'MISSING_CREDENTIALS'
+            }), 400
+        
+        if not nom or not prenom:
+            return jsonify({
+                'success': False,
+                'message': 'Nom et prénom requis',
+                'error_code': 'MISSING_NAME'
             }), 400
             
         if len(password) < 6:
@@ -175,13 +189,16 @@ def register():
                     db.session.add(role_obj)
                     db.session.flush()
                 
-            # Créer le nouvel utilisateur
+            # Créer le nouvel utilisateur avec tous les attributs
             new_user = User(
                 email=email,
                 nom=nom,
                 prenom=prenom,
-                status='active'
+                status=status,
+                ur=ur,
+                brigade=brigade
             )
+            # Le mot de passe est automatiquement hashé via set_password
             new_user.set_password(password)
             new_user.roles.append(role_obj)
             
@@ -197,19 +214,24 @@ def register():
                     'nom': new_user.nom,
                     'prenom': new_user.prenom,
                     'role': role_obj.intitule,
-                    'roles': [r.intitule for r in new_user.roles]
+                    'roles': [r.intitule for r in new_user.roles],
+                    'ur': new_user.ur,
+                    'brigade': new_user.brigade,
+                    'status': new_user.status
                 }
             }), 201
             
         except Exception as e:
             db.session.rollback()
+            print(f"Error creating user: {str(e)}")
             return jsonify({
                 'success': False,
-                'message': 'Erreur lors de la création de l\'utilisateur',
+                'message': f'Erreur lors de la création de l\'utilisateur: {str(e)}',
                 'error_code': 'USER_CREATION_ERROR'
             }), 500
             
     except Exception as e:
+        print(f"Error in register: {str(e)}")
         return jsonify({
             'success': False,
             'message': 'Erreur interne du serveur',
@@ -224,26 +246,35 @@ def get_current_user():
     Retourne les informations de l'utilisateur connecté
     """
     try:
-        from flask import g
+        # Récupérer les informations depuis request (ajoutées par @token_required)
+        user_id = request.user_id
         
-        if not hasattr(g, 'current_user') or g.current_user is None:
+        # Charger l'utilisateur depuis la base de données pour avoir toutes les infos
+        user = User.query.get(user_id)
+        if not user:
             return jsonify({
                 'success': False,
-                'message': 'Utilisateur non authentifié',
-                'error_code': 'NOT_AUTHENTICATED'
-            }), 401
-            
-        user = g.current_user
+                'message': 'Utilisateur non trouvé',
+                'error_code': 'USER_NOT_FOUND'
+            }), 404
+        
         return jsonify({
             'success': True,
             'user': {
-                'id': user.get('user_id'),
-                'email': user.get('email'),
-                'role': user.get('role')
+                'id': user.id,
+                'email': user.email,
+                'nom': user.nom,
+                'prenom': user.prenom,
+                'role': user.roles[0].intitule if user.roles else None,
+                'roles': [role.intitule for role in user.roles],
+                'ur': user.ur,
+                'brigade': user.brigade,
+                'status': user.status
             }
         }), 200
         
     except Exception as e:
+        print(f"Error in get_current_user: {str(e)}")
         return jsonify({
             'success': False,
             'message': 'Erreur interne du serveur',

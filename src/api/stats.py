@@ -5,35 +5,9 @@ Gère les endpoints de statistiques et d'analyse des risques
 from flask import Blueprint, jsonify, request, current_app
 import pandas as pd
 import os
-from utils.util import get_latest_risk_file
+from api.risk_data import get_risk_dataframe
+
 stats_bp = Blueprint('stats', __name__)
-
-
-# Variable globale pour les données de risque
-file_name = get_latest_risk_file()
-_risk_data_df = None
-risk_file_path = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-                'data','risk_contribuables',
-                file_name
-            )
-
-def _load_risk_data():
-    """Charge les données de risque depuis le fichier CSV"""
-    global _risk_data_df
-    if _risk_data_df is None or _risk_data_df.empty:
-            if os.path.exists(risk_file_path):
-                try:
-                    _risk_data_df = pd.read_csv(risk_file_path, sep=';', encoding='utf-8')
-                    print(f"Risk data loaded: {_risk_data_df.shape}")
-                except Exception as e:
-                    print(f"Error loading risk data: {str(e)}")
-    return _risk_data_df
-
-
-def get_risk_dataframe():
-    """Retourne le DataFrame des données de risque"""
-    return _load_risk_data()
 
 
 @stats_bp.route('/stats', methods=['GET'])
@@ -41,11 +15,15 @@ def get_stats():
     """
     Renvoie les statistiques globales des données de risque
     
+    Query Parameters:
+        - libelle_quantume (str): Libellé du quantum (optionnel)
+    
     Returns:
         JSON avec les statistiques agrégées
     """
     try:
-        df = get_risk_dataframe()
+        libelle_quantume = request.args.get('libelle_quantume', None)
+        df = get_risk_dataframe(libelle_quantume)
         
         if df is None or df.empty:
             return jsonify({
@@ -101,11 +79,15 @@ def get_summary():
     """
     Renvoie un résumé des données de risque
     
+    Query Parameters:
+        - libelle_quantume (str): Libellé du quantum (optionnel)
+    
     Returns:
         JSON avec le résumé des données
     """
     try:
-        df = get_risk_dataframe()
+        libelle_quantume = request.args.get('libelle_quantume', None)
+        df = get_risk_dataframe(libelle_quantume)
         
         if df is None or df.empty:
             return jsonify({
@@ -527,12 +509,14 @@ def get_indicator_distribution(indicator_id):
     Query Parameters:
         - annee (int): Année fiscale (optionnel, filtre par année)
         - structure (str): Code structure (optionnel, filtre par structure)
+        - libelle_quantume (str): Libellé du quantum (optionnel)
     
     Returns:
         JSON avec la distribution des risques pour l'indicateur
     """
     try:
-        df = get_risk_dataframe()
+        libelle_quantume = request.args.get('libelle_quantume', None)
+        df = get_risk_dataframe(libelle_quantume)
         
         if df is None or df.empty:
             return jsonify({
@@ -713,11 +697,15 @@ def list_indicators():
     """
     Liste tous les indicateurs disponibles avec leurs statistiques de base
     
+    Query Parameters:
+        - libelle_quantume (str): Libellé du quantum (optionnel)
+    
     Returns:
         JSON avec la liste des indicateurs
     """
     try:
-        df = get_risk_dataframe()
+        libelle_quantume = request.args.get('libelle_quantume', None)
+        df = get_risk_dataframe(libelle_quantume)
         
         if df is None or df.empty:
             return jsonify({
@@ -791,11 +779,15 @@ def get_risk_colors_distribution():
     Endpoint pour obtenir le nombre de contribuables par couleur de risque (Rouge, Orange, Jaune, Vert)
     Agrège les données de tous les indicateurs
     
+    Query Parameters:
+        - libelle_quantume (str): Libellé du quantum (optionnel)
+    
     Returns:
         JSON avec le comptage par couleur et statistiques détaillées
     """
     try:
-        df = get_risk_dataframe()
+        libelle_quantume = request.args.get('libelle_quantume', None)
+        df = get_risk_dataframe(libelle_quantume)
         
         if df is None or df.empty:
             return jsonify({

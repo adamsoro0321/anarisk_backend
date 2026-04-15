@@ -33,15 +33,15 @@ class DirReader:
     
     Structure hiérarchique (4 niveaux):
     fiches/
-        programme_YYYY_MM_DD/           <- Programme (Niveau 0)
+        Q[1-4]_YYYY/                     <- Programme (Niveau 0) ex: Q1_2026, Q2_2025
             STRUCTURE/                   <- Structure (Niveau 1) ex: DGE, DME_CI, DRI_CN
                 SOUS_STRUCTURE/          <- Sous-structure (Niveau 2) ex: DIRECTION_GRANDES ENTREPRISES, DCI_OUAGA_1
                     BRIGADE/             <- Brigade (Niveau 3) ex: BV1_DGE, BV3_DME-CI
                         fichiers (.xlsx, .png)
     
     Exemples de chemins complets:
-    - programme_2025_12_25/DGE/DIRECTION_GRANDES ENTREPRISES/BV1_DGE
-    - programme_2025_12_25/DME_CI/DCI_OUAGA_1/BV3_DME-CI
+    - Q1_2026/DGE/DIRECTION_GRANDES ENTREPRISES/BV1_DGE
+    - Q2_2025/DME_CI/DCI_OUAGA_1/BV3_DME-CI
     """
     
     def __init__(self, root_path: str = None):
@@ -71,14 +71,19 @@ class DirReader:
         Returns:
             Liste des programmes avec leurs informations (nom, date, chemin, nombre de structures)
         """
+        import re
         programmes = []
+        # Pattern pour Q[1-4]_YYYY (insensible à la casse)
+        pattern = re.compile(r'^[Qq][1-4]_\d{4}$')
+        
         for item in self.root_dir.iterdir():
-            if item.is_dir() and item.name.startswith("programme_"):
-                # Extraire la date du nom du programme (format: programme_YYYY_MM_DD)
+            if item.is_dir() and pattern.match(item.name):
+                # Extraire le trimestre et l'année (format: Q1_2026)
                 try:
-                    date_str = item.name.replace("programme_", "")
-                    date_parts = date_str.split("_")
-                    date_formatted = f"{date_parts[2]}/{date_parts[1]}/{date_parts[0]}"
+                    parts = item.name.upper().split("_")
+                    quarter = parts[0]  # Q1, Q2, Q3, Q4
+                    year = parts[1]     # 2026
+                    date_formatted = f"{quarter} {year}"
                 except (IndexError, ValueError):
                     date_formatted = "Date inconnue"
                 
@@ -91,8 +96,17 @@ class DirReader:
                     "structures_count": structures_count
                 })
         
-        # Trier par date décroissante
-        programmes.sort(key=lambda x: x["name"], reverse=True)
+        # Trier par année et trimestre décroissants
+        def sort_key(prog):
+            try:
+                parts = prog["name"].upper().split("_")
+                year = int(parts[1])
+                quarter = int(parts[0][1])  # Extraire le chiffre de Q1, Q2, etc.
+                return (year, quarter)
+            except:
+                return (0, 0)
+        
+        programmes.sort(key=sort_key, reverse=True)
         return programmes
     
     # ========== FONCTIONS DE LISTING - NIVEAU 1: STRUCTURES ==========
@@ -102,7 +116,7 @@ class DirReader:
         Liste toutes les structures dans un programme donné.
         
         Args:
-            programme_name: Nom du programme (ex: 'programme_2025_12_25')
+            programme_name: Nom du programme (ex: 'Q1_2026', 'Q2_2025')
             
         Returns:
             Liste des structures avec leurs informations (code, sous-structures, fichiers)
@@ -138,7 +152,7 @@ class DirReader:
         Liste toutes les sous-structures dans une structure donnée.
         
         Args:
-            programme_name: Nom du programme (ex: 'programme_2025_12_25')
+            programme_name: Nom du programme (ex: 'Q1_2026', 'Q2_2025')
             structure_code: Code de la structure (ex: 'DGE', 'DME_CI')
             
         Returns:

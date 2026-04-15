@@ -55,10 +55,10 @@ class DataLoader:
     DATA_DIR = "../data"
     DOCS_DIR = "../docs"
 
-    def __init__(self, oracle_engine: Engine):
+    def __init__(self, IS_LOCAL_MODE: bool=False, oracle_engine: Engine=None):
         self.oracle_engine = oracle_engine
         self.logger = logging.getLogger(__name__)
-        self.IS_LOCAL_MODE = False
+        self.IS_LOCAL_MODE = IS_LOCAL_MODE
         self.non_eligible_list = []
         # Charger les fichiers de référence
         self.load_reference_data()
@@ -125,9 +125,6 @@ class DataLoader:
         """Initialiser avec des DataFrames vides en cas d'erreur"""
         self.non_eligible_list = []
         self.entreprises_liees = pd.DataFrame()
-        self.meta_donnees = pd.DataFrame()
-        self.fiche_pistes = pd.DataFrame()
-        self.nomenclature_sh = pd.DataFrame()
         self.dcf_activites = pd.DataFrame()
 
     def extract_complete_oracle_data(self) -> Dict[str, pd.DataFrame]:
@@ -177,12 +174,13 @@ class DataLoader:
             contribuables = pd.read_csv(f"{self.DATA_DIR}/contribuables.csv")
         else:
             contribuables = pd.read_sql(sql_contribuable, connection)
-
+            contribuables.columns = contribuables.columns.str.upper()
+            contribuables = contribuables[contribuables["NUM_IFU"].str.match(r"^.{9}$")]
             #ajoute un traitement sur le tel
             # save in data/contribuables.csv
-            contribuables.to_csv(
-                f"{self.DATA_DIR}/contribuables.csv", index=False, encoding="utf-8"
-            )
+            #contribuables.to_csv(
+            #    f"{self.DATA_DIR}/contribuables.csv", index=False, encoding="utf-8"
+            #)
             contribuables.drop_duplicates(inplace=True)
         contribuables.columns = contribuables.columns.str.upper()
         initial_count = len(contribuables)
@@ -279,7 +277,7 @@ class DataLoader:
         except Exception as e:
             self.logger.error(f"Erreur lors de l'extraction DGD: {e}")
             return pd.DataFrame()
-
+    
     def _extract_programmation_controles(self, connection) -> pd.DataFrame:
         """Extraction des données de programmation et contrôles"""
         self.logger.info("Extraction programmation et contrôles")
@@ -370,7 +368,74 @@ class DataLoader:
         if column_name in df.columns:
             df[column_name] = df[column_name].astype(str).str.strip()
         return df
+    #=================
+    def extract_dgd(self, connection) -> pd.DataFrame:
+        """Extraction complète des données DGD avec nomenclature SH"""
+        self.logger.info("Extraction DGD complète avec nomenclature")
 
+        cache_path = f"{self.DATA_DIR}/data_douanes.csv"
+        try:
+            start_time = time.time()
+          
+            dgd_data = pd.read_sql(sql_dgd, connection)
+            dgd_data.to_csv(cache_path, index=False, encoding="utf-8")
+            self.logger.info(
+                    f"DGD extraite de la base Oracle et sauvegardée: {len(dgd_data)} lignes"
+            )
+            dgd_data.columns = dgd_data.columns.str.upper()
+
+            elapsed_time = time.time() - start_time
+            self.logger.info(
+                f"DGD complète extraite: {len(dgd_data)} lignes en {elapsed_time:.2f}s"
+            )
+            return dgd_data
+
+        except Exception as e:
+            self.logger.error(f"Erreur lors de l'extraction DGD: {e}")
+            return pd.DataFrame()
+        
+    def extract_ifu(self, connection) -> pd.DataFrame:
+        """Extraction complète des données IFU"""
+        self.logger.info("Extraction IFU complète")
+        sql_ifu = """
+         SELECT 
+        c.ID_CONTR, c.NUM_IFU, c.NOM, c.NOM_MINEFID, c.DATE_CREATION, c.DATE_IMMAT, c.ETAT,
+        c.TEL, c.EMAIL, c.CODE_FJ, c.CODE_REG_FISC, c.CODE_SECT_ACT, c.CAPITAL,
+        c.CHIF_AFFAIREPREV, c.ADR_CTR, c.NATIONALITE_CTR, c.FLAG_RESIDENT,
+        c.NOCNSS, c.FLAG_EMPLOYEUR, i.LIBELLE_DCI as STRUCTURES,
+        da.LIBELLE_SECT_ACT,
+        da.LIBELLE_GR_SECT_ACT
+        FROM SID_CONTRIBUABLE c
+        LEFT JOIN SID_CONTRIBUABLE_IMMAT i ON c.NUM_IFU = i.NUMEROIFU
+        LEFT JOIN PROG_DCF.DCF_ACTIVITES da ON c.CODE_SECT_ACT = da.CODE_SECT_ACT 
+        WHERE  c.NUM_IFU IS NOT NULL 
+        ORDER BY c.NUM_IFU
+        """
+
+        cache_path = f"{self.DATA_DIR}/data_ifu.csv"
+        try:
+            start_time = time.time()
+            if os.path.exists(cache_path):
+                ifu_data = pd.read_csv(cache_path)
+                self.logger.info(f"IFU chargée depuis le cache: {cache_path}")
+            else:
+                ifu_data = pd.read_sql(sql_ifu, connection)
+                ifu_data.to_csv(cache_path, index=False, encoding="utf-8")
+                self.logger.info(
+                    f"IFU extraite de la base Oracle et sauvegardée: {len(ifu_data)} lignes"
+                )
+            ifu_data.columns = ifu_data.columns.str.upper()
+
+            elapsed_time = time.time() - start_time
+            self.logger.info(
+                f"IFU complète extraite: {len(ifu_data)} lignes en {elapsed_time:.2f}s"
+            )
+            return ifu_data
+
+        except Exception as e:
+            self.logger.error(f"Erreur lors de l'extraction IFU: {e}")
+            return pd.DataFrame()
+        
     def merge_all_data(self, extracted_data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
         """Fusion de toutes les données extraites"""
         self.logger.info("2.=== FUSION DES DONNÉES ===")
@@ -381,7 +446,48 @@ class DataLoader:
                 extracted_data[key] = self._normalize_annee_column(extracted_data[key])
                 self.logger.debug(f"Colonne ANNEE normalisée pour {key}")
 
+        # Filtrer les IFU invalides dans les tables sources
+        # Un IFU valide fait exactement 9 caractères et n'est pas composé uniquement de zéros
+        VALID_IFU_PATTERN = r"^(?!0+$).{9}$"
+        for key in ["bd_tva", "tva_deductions", "dgd_data", "benefices"]:
+            if key in extracted_data and not extracted_data[key].empty and "NUM_IFU" in extracted_data[key].columns:
+                df = extracted_data[key]
+                mask = df["NUM_IFU"].notna() & df["NUM_IFU"].astype(str).str.match(VALID_IFU_PATTERN)
+                extracted_data[key] = df[mask]
+                removed = len(df) - len(extracted_data[key])
+                if removed > 0:
+                    self.logger.info(f"IFU invalides filtrés dans {key}: {removed} lignes supprimées")
+
+        if "insd" in extracted_data and not extracted_data["insd"].empty:
+            insd_ifu_col = "NUM_IFU_CONTRIBUABLE" if "NUM_IFU_CONTRIBUABLE" in extracted_data["insd"].columns else "NUM_IFU"
+            if insd_ifu_col in extracted_data["insd"].columns:
+                df = extracted_data["insd"]
+                mask = df[insd_ifu_col].notna() & df[insd_ifu_col].astype(str).str.match(VALID_IFU_PATTERN)
+                extracted_data["insd"] = df[mask]
+                removed = len(df) - len(extracted_data["insd"])
+                if removed > 0:
+                    self.logger.info(f"IFU invalides filtrés dans insd: {removed} lignes supprimées")
+                # Déduplication insd sur (ifu_col, ANNEE)
+                if "ANNEE" in extracted_data["insd"].columns:
+                    df = extracted_data["insd"]
+                    extracted_data["insd"] = df.drop_duplicates(subset=[insd_ifu_col, "ANNEE"])
+                    dedup_removed = len(df) - len(extracted_data["insd"])
+                    if dedup_removed > 0:
+                        self.logger.info(f"Doublons ({insd_ifu_col}, ANNEE) supprimés dans insd: {dedup_removed}")
+
+        # Déduplication des tables sources sur (NUM_IFU, ANNEE) pour éviter les produits cartésiens
+        for key in ["bd_tva", "tva_deductions", "dgd_data", "benefices"]:
+            if key in extracted_data and not extracted_data[key].empty and "NUM_IFU" in extracted_data[key].columns:
+                annee_col = "ANNEE"
+                if annee_col in extracted_data[key].columns:
+                    df = extracted_data[key]
+                    extracted_data[key] = df.drop_duplicates(subset=["NUM_IFU", annee_col])
+                    dedup_removed = len(df) - len(extracted_data[key])
+                    if dedup_removed > 0:
+                        self.logger.info(f"Doublons (NUM_IFU, ANNEE) supprimés dans {key}: {dedup_removed}")
+
         # 1.recuperation de la table contribuables
+        valid_ifus = set(extracted_data["contribuables"]["NUM_IFU"].dropna().unique())
         merged_data = extracted_data["contribuables"].copy()
         # 2. Fusion avec BD_TVA
         if "bd_tva" in extracted_data:
@@ -410,6 +516,13 @@ class DataLoader:
             self.logger.info(f"Fusion avec DGD: {len(merged_data)} lignes")
         if "programmation" in extracted_data:
             extracted_data["programmation"].drop("DATE_IMMAT", axis=1, inplace=True)
+            # Déduplication programmation sur (NUM_IFU, NOM_MINEFID) pour éviter
+            # la multiplication des lignes lors du LEFT JOIN
+            prog = extracted_data["programmation"]
+            extracted_data["programmation"] = prog.drop_duplicates(subset=["NUM_IFU", "NOM_MINEFID"])
+            prog_removed = len(prog) - len(extracted_data["programmation"])
+            if prog_removed > 0:
+                self.logger.info(f"Doublons (NUM_IFU, NOM_MINEFID) supprimés dans programmation: {prog_removed}")
             merged_data = pd.merge(
                 merged_data,
                 extracted_data["programmation"],
@@ -437,6 +550,24 @@ class DataLoader:
                 how="outer",
             )
             self.logger.info(f"Fusion avec INSD: {len(merged_data)} lignes")
+
+        # Filtrer pour ne garder que les IFU présents dans la table contribuables de référence
+        before_filter = len(merged_data)
+        merged_data = merged_data[merged_data["NUM_IFU"].isin(valid_ifus)]
+        removed = before_filter - len(merged_data)
+        if removed > 0:
+            self.logger.info(f"Lignes avec IFU hors contribuables supprimées: {removed}")
+
+        # Contrôle final : suppression des doublons (NUM_IFU, ANNEE)
+        # Un contribuable peut apparaître plusieurs fois mais uniquement à des années différentes
+        if "ANNEE" in merged_data.columns:
+            before_dedup = len(merged_data)
+            merged_data.drop_duplicates(subset=["NUM_IFU", "ANNEE"], keep="first", inplace=True)
+            dedup_removed = before_dedup - len(merged_data)
+            if dedup_removed > 0:
+                self.logger.info(f"Doublons (NUM_IFU, ANNEE) supprimés dans merged_data final: {dedup_removed}")
+            else:
+                self.logger.info("Aucun doublon (NUM_IFU, ANNEE) détecté dans merged_data final")
 
         merged_data.to_csv(
             f"{self.DATA_DIR}/merged_data/merged_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", index=False, encoding="utf-8"
@@ -508,3 +639,4 @@ class DataLoader:
         )
 
         return merged_data
+    

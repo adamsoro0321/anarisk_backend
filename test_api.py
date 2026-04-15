@@ -37,7 +37,9 @@ def test_register():
         "password": "password123",
         "nom": "Ouedraogo",
         "prenom": "Moussa",
-        "role": "user"
+        "role": "bv",
+        "ur": "DGE",
+        "brigade": "BV1_DGE"
     }
     response = requests.post(
         f"{BASE_URL}/api/v1/register",
